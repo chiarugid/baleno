@@ -3,13 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arcobaleno Bidirezionale</title>
+    <title>Arcobaleno con Parole Casuali</title>
     <style>
         html, body {
             height: 100%;
             margin: 0;
         }
         body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 3em;
+            font-family: sans-serif;
+            color: white;
+            text-shadow: 2px 2px 4px black;
+
             background: linear-gradient(to bottom, 
                 red, orange, yellow, green, cyan, blue, violet);
             background-size: 100% 400%;
@@ -22,5 +30,30 @@
     </style>
 </head>
 <body>
+    <div id="parole"></div>
+
+    <script>
+        // Lista di parole in varie lingue
+        const parole = [
+            "Ciao", "Hello", "Hola", "Bonjour", "Hallo", "Привет", 
+            "こんにちは", "안녕하세요", "Merhaba", "Salam", "Hej", "Aloha",
+            "Shalom", "Xin chào", "Sawubona", "Γειά", "Selamat", "Sveiki"
+        ];
+
+        // Pesca 4 parole casuali senza ripetizioni
+        function scegliParoleCasuali() {
+            let copia = [...parole];
+            let scelte = [];
+            for (let i = 0; i < 4; i++) {
+                let indice = Math.floor(Math.random() * copia.length);
+                scelte.push(copia[indice]);
+                copia.splice(indice, 1);
+            }
+            return scelte.join("   ");
+        }
+
+        // Inserisci le parole nella pagina
+        document.getElementById("parole").textContent = scegliParoleCasuali();
+    </script>
 </body>
 </html>
