@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arcobaleno Scorrevole</title>
+    <title>Arcobaleno Bidirezionale</title>
     <style>
         html, body {
             height: 100%;
@@ -13,11 +13,11 @@
             background: linear-gradient(to bottom, 
                 red, orange, yellow, green, cyan, blue, violet);
             background-size: 100% 400%;
-            animation: rainbow 5s linear infinite;
+            animation: rainbow 5s ease-in-out infinite alternate;
         }
         @keyframes rainbow {
-            0% { background-position: 50% 100%; }
-            100% { background-position: 50% 0%; }
+            0% { background-position: 50% 0%; }
+            100% { background-position: 50% 100%; }
         }
     </style>
 </head>
