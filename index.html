@@ -13,7 +13,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 2.2em;
+            font-size: 2.5em;
             font-family: sans-serif;
             color: white;
             text-shadow: 2px 2px 4px black;
@@ -29,14 +29,14 @@
             0% { background-position: 50% 0%; }
             100% { background-position: 50% 100%; }
         }
-        #parole {
+        #parola {
             opacity: 1;
             transition: opacity 1s ease-in-out;
         }
     </style>
 </head>
 <body>
-    <div id="parole"></div>
+    <div id="parola"></div>
 
     <script>
         const parole = [
@@ -45,38 +45,30 @@
             "Velkommen", "Aloha", "Shalom", "Xin chào", "Sawubona", "Καλώς ήρθατε",
             "Selamat Datang", "Sveiki atvykę", "Tervetuloa", "Witamy", "Vitajte",
             "Üdvözöljük", "Bine ați venit", "स्वागत है", "স্বাগতম", "සාදරයෙන් පිළිගනිමු",
-            "ברוך הבא", "ยินดีต้อนรับ", "Selamat datang", "Welkom", "Karibu", 
-            " خوش آمدید", "Mabuhay", "Dobrodošli", "Добре дошли", "Tere tulemast",
-            "Chào mừng", "Bem-vindo", "Dobrodošli", "Fàilte", "Hæ", "Selamat datang",
-            "Velkomin", "Maligayang pagdating", "Afio mai", "Ongi etorri", "Salve",
-            "Grüß Gott", "Välkommen", "Merhba", "Croeso"
+            "ברוך הבא", "ยินดีต้อนรับ", "Welkom", "Karibu", " خوش آمدید", "Mabuhay",
+            "Dobrodošli", "Добре дошли", "Tere tulemast", "Chào mừng", "Bem-vindo",
+            "Fàilte", "Merhba", "Croeso"
         ];
 
-        function scegliParoleCasuali() {
-            let copia = [...parole];
-            let scelte = [];
-            for (let i = 0; i < 4; i++) {
-                let indice = Math.floor(Math.random() * copia.length);
-                scelte.push(copia[indice]);
-                copia.splice(indice, 1);
-            }
-            return scelte.join("   ");
+        const divParola = document.getElementById("parola");
+
+        function scegliParolaCasuale() {
+            const indice = Math.floor(Math.random() * parole.length);
+            return parole[indice];
         }
 
-        const divParole = document.getElementById("parole");
-
-        function aggiornaParole() {
-            divParole.style.opacity = 0;
+        function aggiornaParola() {
+            divParola.style.opacity = 0;
             setTimeout(() => {
-                divParole.textContent = scegliParoleCasuali();
-                divParole.style.opacity = 1;
+                divParola.textContent = scegliParolaCasuale();
+                divParola.style.opacity = 1;
             }, 1000);
         }
 
         // Prima visualizzazione
-        aggiornaParole();
+        aggiornaParola();
         // Aggiorna ogni 4 secondi
-        setInterval(aggiornaParole, 4000);
+        setInterval(aggiornaParola, 4000);
     </script>
 </body>
 </html>
