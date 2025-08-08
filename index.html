@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arcobaleno con Parole Casuali</title>
+    <title>Arcobaleno con Benvenuti</title>
     <style>
         html, body {
             height: 100%;
@@ -13,10 +13,12 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 3em;
+            font-size: 2.2em;
             font-family: sans-serif;
             color: white;
             text-shadow: 2px 2px 4px black;
+            text-align: center;
+            padding: 10px;
 
             background: linear-gradient(to bottom, 
                 red, orange, yellow, green, cyan, blue, violet);
@@ -27,20 +29,29 @@
             0% { background-position: 50% 0%; }
             100% { background-position: 50% 100%; }
         }
+        #parole {
+            opacity: 1;
+            transition: opacity 1s ease-in-out;
+        }
     </style>
 </head>
 <body>
     <div id="parole"></div>
 
     <script>
-        // Lista di parole in varie lingue
         const parole = [
-            "Ciao", "Hello", "Hola", "Bonjour", "Hallo", "Привет", 
-            "こんにちは", "안녕하세요", "Merhaba", "Salam", "Hej", "Aloha",
-            "Shalom", "Xin chào", "Sawubona", "Γειά", "Selamat", "Sveiki"
+            "Benvenuto", "Welcome", "Bienvenido", "Bienvenue", "Willkommen", 
+            "Добро пожаловать", "ようこそ", "환영합니다", "Hosgeldiniz", "أهلاً وسهلاً",
+            "Velkommen", "Aloha", "Shalom", "Xin chào", "Sawubona", "Καλώς ήρθατε",
+            "Selamat Datang", "Sveiki atvykę", "Tervetuloa", "Witamy", "Vitajte",
+            "Üdvözöljük", "Bine ați venit", "स्वागत है", "স্বাগতম", "සාදරයෙන් පිළිගනිමු",
+            "ברוך הבא", "ยินดีต้อนรับ", "Selamat datang", "Welkom", "Karibu", 
+            " خوش آمدید", "Mabuhay", "Dobrodošli", "Добре дошли", "Tere tulemast",
+            "Chào mừng", "Bem-vindo", "Dobrodošli", "Fàilte", "Hæ", "Selamat datang",
+            "Velkomin", "Maligayang pagdating", "Afio mai", "Ongi etorri", "Salve",
+            "Grüß Gott", "Välkommen", "Merhba", "Croeso"
         ];
 
-        // Pesca 4 parole casuali senza ripetizioni
         function scegliParoleCasuali() {
             let copia = [...parole];
             let scelte = [];
@@ -52,8 +63,20 @@
             return scelte.join("   ");
         }
 
-        // Inserisci le parole nella pagina
-        document.getElementById("parole").textContent = scegliParoleCasuali();
+        const divParole = document.getElementById("parole");
+
+        function aggiornaParole() {
+            divParole.style.opacity = 0;
+            setTimeout(() => {
+                divParole.textContent = scegliParoleCasuali();
+                divParole.style.opacity = 1;
+            }, 1000);
+        }
+
+        // Prima visualizzazione
+        aggiornaParole();
+        // Aggiorna ogni 4 secondi
+        setInterval(aggiornaParole, 4000);
     </script>
 </body>
 </html>
