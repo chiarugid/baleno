@@ -788,13 +788,13 @@ test('FSPL: 2400 MHz a 1 km ≈ 100 dB', () => {
   assert.equal(fspl(1, 0), null);
 });
 
-test('budget di collegamento, margine e distanza massima', () => {
-  const lb = linkBudget({ eirpDbm: 20, distanceKm: 1, freqMHz: 2400, rxGainDbi: 2, rxLossDb: 1, sensitivityDbm: -82 });
+test('budget di collegamento, margine sull’RSSI di progetto e distanza massima', () => {
+  const lb = linkBudget({ eirpDbm: 20, distanceKm: 1, freqMHz: 2400, rxGainDbi: 2, rxLossDb: 1, targetRssiDbm: -67 });
   near(lb.fspl, 100.04, 0.01);
   near(lb.rxDbm, 20 - 100.044 + 2 - 1, 0.001);
-  near(lb.margin, lb.rxDbm + 82, 1e-9);
-  // alla distanza massima la potenza ricevuta coincide con la sensibilità
-  const atMax = linkBudget({ eirpDbm: 20, distanceKm: lb.maxDistanceKm, freqMHz: 2400, rxGainDbi: 2, rxLossDb: 1, sensitivityDbm: -82 });
+  near(lb.margin, lb.rxDbm + 67, 1e-9);
+  // alla distanza massima la potenza ricevuta coincide con l'RSSI di progetto
+  const atMax = linkBudget({ eirpDbm: 20, distanceKm: lb.maxDistanceKm, freqMHz: 2400, rxGainDbi: 2, rxLossDb: 1, targetRssiDbm: -67 });
   near(atMax.margin, 0, 1e-9);
   const noSens = linkBudget({ eirpDbm: 20, distanceKm: 1, freqMHz: 2400 });
   assert.equal(noSens.margin, null);
@@ -805,7 +805,13 @@ test('limiti EIRP indicativi per banda', () => {
   assert.equal(bandCheck(20, '2g4').ok, true);
   assert.equal(bandCheck(20.5, '2g4').ok, false);
   near(bandCheck(23, '2g4').excess, 3, 1e-12);
-  assert.equal(bandCheck(30, 'unii2c').ok, true);
+  assert.equal(bandCheck(30, 'unii2c').ok, true, 'U-NII-2C con TPC e DFS: 30 dBm');
+  assert.equal(bandCheck(30, 'unii2c-notpc').ok, false, 'U-NII-2C senza TPC: 27 dBm');
+  assert.equal(bandCheck(27, 'unii2c-notpc').ok, true);
+  assert.equal(bandCheck(23, 'unii2a').ok, true);
+  assert.equal(bandCheck(23, 'unii2a-notpc').ok, false, 'U-NII-2A senza TPC: 20 dBm');
+  assert.equal(bandCheck(23, 'unii1').band.label.includes('indoor'), true);
+  assert.match(bandCheck(14, 'srd58').band.note, /non è una banda Wi-Fi U-NII europea/i);
   assert.equal(bandCheck(23, 'lpi6').ok, true);
   assert.equal(bandCheck(15, 'vlp6').ok, false);
   assert.equal(bandCheck(20, ''), null);

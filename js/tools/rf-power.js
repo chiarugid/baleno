@@ -22,15 +22,17 @@ export function fspl(distanceKm, freqMHz) {
   return 20 * Math.log10(distanceKm) + 20 * Math.log10(freqMHz) + 32.44;
 }
 
-export function linkBudget({ eirpDbm, distanceKm, freqMHz, rxGainDbi = 0, rxLossDb = 0, sensitivityDbm = null }) {
+// targetRssiDbm: RSSI di progetto, cioè il livello minimo da garantire al client
+// (es. −67 dBm per la voce su Wi-Fi). Non è la sensibilità del ricevitore.
+export function linkBudget({ eirpDbm, distanceKm, freqMHz, rxGainDbi = 0, rxLossDb = 0, targetRssiDbm = null }) {
   const loss = fspl(distanceKm, freqMHz);
   if (loss == null) return null;
   const rxDbm = eirpDbm - loss + rxGainDbi - rxLossDb;
   const result = { fspl: loss, rxDbm, margin: null, maxDistanceKm: null };
-  if (sensitivityDbm != null) {
-    result.margin = rxDbm - sensitivityDbm;
-    // Distanza alla quale la potenza ricevuta eguaglia la sensibilità (spazio libero).
-    const allowed = eirpDbm + rxGainDbi - rxLossDb - sensitivityDbm;
+  if (targetRssiDbm != null) {
+    result.margin = rxDbm - targetRssiDbm;
+    // Distanza alla quale la potenza ricevuta scende all'RSSI di progetto (spazio libero).
+    const allowed = eirpDbm + rxGainDbi - rxLossDb - targetRssiDbm;
     result.maxDistanceKm = 10 ** ((allowed - 32.44 - 20 * Math.log10(freqMHz)) / 20);
   }
   return result;
@@ -69,7 +71,7 @@ export function formatDistance(km) {
 
 // ---------------------------------------------------------------- Interfaccia
 
-const DEFAULTS = { dbm: '20', tx: '17', loss: '1', gain: '4', band: '2g4', d: '50', unit: 'm', f: '2437', grx: '2', lrx: '0', sens: '-67' };
+const DEFAULTS = { dbm: '20', tx: '17', loss: '1', gain: '4', band: '2g4', d: '50', unit: 'm', f: '2437', grx: '2', lrx: '0', rssi: '-67' };
 const DBM_EXAMPLES = ['0', '20', '30', '-67'];
 const FREQ_EXAMPLES = [['2412', 'ch 1'], ['2437', 'ch 6'], ['5180', 'ch 36'], ['5500', 'ch 100'], ['6135', '6E ch 37']];
 
@@ -138,10 +140,10 @@ export function render(container, params, ctx) {
   const freq = numberField(uid('f'), 'Frequenza', 'MHz');
   const grx = numberField(uid('grx'), 'Guadagno antenna Rx', 'dBi');
   const lrx = numberField(uid('lrx'), 'Perdita cavo Rx', 'dB');
-  const sens = numberField(uid('sens'), 'Sensibilità Rx', 'dBm', { placeholder: 'facoltativa' });
+  const sens = numberField(uid('rssi'), 'RSSI di progetto', 'dBm', { placeholder: 'facoltativo' });
   const budgetOut = h('div');
   const budgetDl = dashlet({ title: 'Budget di collegamento', subtitle: 'spazio libero, usa l’EIRP sopra', className: 'span-all', onReset: () => {
-    for (const [f, k] of [[dist, 'd'], [freq, 'f'], [grx, 'grx'], [lrx, 'lrx'], [sens, 'sens']]) f.input.value = DEFAULTS[k];
+    for (const [f, k] of [[dist, 'd'], [freq, 'f'], [grx, 'grx'], [lrx, 'lrx'], [sens, 'rssi']]) f.input.value = DEFAULTS[k];
     unitSelect.value = DEFAULTS.unit; update();
   } });
   budgetDl.body.append(h('div', { class: 'tool-split' },
@@ -151,6 +153,7 @@ export function render(container, params, ctx) {
         h('span', { class: 'examples__label' }, 'Canali'),
         FREQ_EXAMPLES.map(([f, label]) => h('button', { type: 'button', class: 'chip', title: `${f} MHz`, onclick: () => { freq.input.value = f; update(); } }, label))),
       h('div', { class: 'field-row field-row--3' }, grx.el, lrx.el, sens.el),
+      h('p', { class: 'field__hint' }, 'RSSI di progetto: il livello minimo che vuoi garantire al client (−67 dBm è il valore tipico per la voce su Wi-Fi). Non è la sensibilità del ricevitore, che è molto più bassa (circa −90 dBm ai rate minimi).'),
       h('p', { class: 'field__hint' }, 'FSPL = 20·log₁₀(d km) + 20·log₁₀(f MHz) + 32,44. Non considera muri, ostacoli, zona di Fresnel né multipath: in interni la perdita reale è maggiore.')),
     budgetOut));
 
@@ -213,20 +216,21 @@ export function render(container, params, ctx) {
     eirpOut.replaceChildren(...nodes);
 
     // Budget
-    const b = { d: readField(dist), f: readField(freq), grx: readField(grx), lrx: readField(lrx), sens: readField(sens, { required: false }) };
+    const b = { d: readField(dist), f: readField(freq), grx: readField(grx), lrx: readField(lrx), rssi: readField(sens, { required: false }) };
     let budgetNodes;
     if (Object.values(b).every((x) => x.ok)) {
       const distanceKm = unitSelect.value === 'km' ? b.d.value : b.d.value / 1000;
       if (!(distanceKm > 0)) setError(dist, 'La distanza deve essere maggiore di zero.');
       if (!(b.f.value > 0)) setError(freq, 'La frequenza deve essere maggiore di zero.');
-      const lb = linkBudget({ eirpDbm: e, distanceKm, freqMHz: b.f.value, rxGainDbi: b.grx.value, rxLossDb: b.lrx.value, sensitivityDbm: b.sens.value });
+      const lb = linkBudget({ eirpDbm: e, distanceKm, freqMHz: b.f.value, rxGainDbi: b.grx.value, rxLossDb: b.lrx.value, targetRssiDbm: b.rssi.value });
       if (lb) {
-        const marginKind = lb.margin == null ? null : lb.margin >= 10 ? 'ok' : lb.margin >= 0 ? 'warn' : 'err';
+        // Sopra l'RSSI di progetto con almeno 5 dB di riserva: ok; tra 0 e 5: al limite; sotto: insufficiente.
+        const marginKind = lb.margin == null ? null : lb.margin >= 5 ? 'ok' : lb.margin >= 0 ? 'warn' : 'err';
         budgetNodes = [
           h('div', { class: 'kpis' },
             kpi('FSPL', fmtDec(lb.fspl, 2), 'dB'),
             kpi('Potenza ricevuta', fmtDec(lb.rxDbm, 2), 'dBm', true),
-            kpi('Margine', lb.margin == null ? '—' : fmtDec(lb.margin, 2), lb.margin == null ? '' : 'dB', marginKind ?? false),
+            kpi('Margine su RSSI', lb.margin == null ? '—' : fmtDec(lb.margin, 2), lb.margin == null ? '' : 'dB', marginKind ?? false),
             kpi('Distanza max', lb.maxDistanceKm == null ? '—' : formatDistance(lb.maxDistanceKm))),
           kvList([
             { label: 'EIRP', value: `${fmtDec(e, 2)} dBm` },
@@ -234,8 +238,8 @@ export function render(container, params, ctx) {
             { label: '+ guadagno Rx', value: `${fmtDec(b.grx.value, 2)} dBi` },
             { label: '− perdita cavo Rx', value: `${fmtDec(b.lrx.value, 2)} dB` },
             { label: '= potenza ricevuta', value: `${fmtDec(lb.rxDbm, 2)} dBm (${formatPower(dbmToMw(lb.rxDbm))})`, hl: true },
-            lb.margin != null ? { label: 'Margine sulla sensibilità', value: [`${fmtDec(lb.margin, 2)} dB `, badge(marginKind === 'ok' ? 'buono' : marginKind === 'warn' ? 'scarso' : 'insufficiente', marginKind)] } : null,
-            lb.maxDistanceKm != null ? { label: 'Distanza alla sensibilità', value: [formatDistance(lb.maxDistanceKm), h('span', { class: 'sub' }, 'teorica, spazio libero')] } : null,
+            lb.margin != null ? { label: 'Margine sull’RSSI di progetto', value: [`${fmtDec(lb.margin, 2)} dB `, badge(marginKind === 'ok' ? 'sopra il target' : marginKind === 'warn' ? 'al limite' : 'sotto il target', marginKind)] } : null,
+            lb.maxDistanceKm != null ? { label: 'Distanza all’RSSI di progetto', value: [formatDistance(lb.maxDistanceKm), h('span', { class: 'sub' }, 'teorica, spazio libero')] } : null,
           ], 'kv--compact'),
         ];
       }
@@ -248,7 +252,7 @@ export function render(container, params, ctx) {
     ctx.setParams({
       dbm: dbm.input.value.trim(), tx: tx.input.value.trim(), loss: loss.input.value.trim(), gain: gain.input.value.trim(),
       band: bandSelect.value, d: dist.input.value.trim(), unit: unitSelect.value, f: freq.input.value.trim(),
-      grx: grx.input.value.trim(), lrx: lrx.input.value.trim(), sens: sens.input.value.trim(),
+      grx: grx.input.value.trim(), lrx: lrx.input.value.trim(), rssi: sens.input.value.trim(),
     });
   }
 
@@ -266,7 +270,7 @@ export function render(container, params, ctx) {
   freq.input.value = v('f');
   grx.input.value = v('grx');
   lrx.input.value = v('lrx');
-  sens.input.value = params.has('sens') ? params.get('sens') : DEFAULTS.sens;
+  sens.input.value = params.has('rssi') ? params.get('rssi') : DEFAULTS.rssi;
   fromDbm();
   update();
 }
