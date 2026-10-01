@@ -1,0 +1,174 @@
+/* Font, colori e misure. Il tema scuro segue prefers-color-scheme
+   salvo scelta esplicita (data-theme su <html>). */
+
+@font-face {
+  font-family: 'Inter';
+  src: url('../fonts/inter-var.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: light;
+
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, 'Liberation Mono', monospace;
+  --fs-xs: 11.5px;
+  --fs-sm: 12.5px;
+  --fs-base: 13.5px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+
+  --topbar-h: 52px;
+  --sidebar-w-open: 232px;
+  --sidebar-w-closed: 56px;
+  --sidebar-w: var(--sidebar-w-open);
+  --gutter: 20px;
+  --radius: 4px;
+  --radius-sm: 3px;
+
+  /* Accento: #049fd9 per barre ed evidenze; varianti più scure dove
+     serve contrasto AA con testo bianco o su fondo chiaro. */
+  --accent: #049fd9;
+  --accent-text: #0277a8;
+  --accent-soft: rgba(4, 159, 217, 0.12);
+  --btn-primary-bg: #037cad;
+  --btn-primary-hover: #026c99;
+  --btn-primary-text: #ffffff;
+  --focus-ring: 0 0 0 3px rgba(4, 159, 217, 0.35);
+
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --surface-2: #f6f8fa;
+  --border: #dde2e8;
+  --border-strong: #c5cdd6;
+  --text: #1c2733;
+  --text-muted: #5b6876;
+  --text-subtle: #7b8896;
+
+  --topbar-bg: #ffffff;
+  --topbar-border: #dde2e8;
+
+  --sidebar-bg: #1d2a3a;
+  --sidebar-hover: #253447;
+  --sidebar-active: #2a3b50;
+  --sidebar-border: #2b3a4d;
+  --sidebar-text: #c3cdd8;
+  --sidebar-text-strong: #ffffff;
+  --sidebar-muted: #8796a8;
+
+  --table-head: #f1f3f6;
+  --row-hover: #f3f8fb;
+  --input-bg: #ffffff;
+  --code-bg: #f3f5f8;
+
+  --ok: #1a7f45;
+  --ok-soft: #e3f4ea;
+  --warn: #a35f00;
+  --warn-soft: #fdf0dc;
+  --err: #c0302b;
+  --err-soft: #fbe5e4;
+  --info-soft: rgba(4, 159, 217, 0.1);
+
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-lg: 0 16px 40px rgba(16, 24, 40, 0.2);
+  --scrim: rgba(12, 18, 26, 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --accent: #1fb1ea;
+    --accent-text: #4cc3f0;
+    --accent-soft: rgba(31, 177, 234, 0.16);
+    --btn-primary-bg: #1fb1ea;
+    --btn-primary-hover: #4cc3f0;
+    --btn-primary-text: #05202c;
+    --focus-ring: 0 0 0 3px rgba(31, 177, 234, 0.4);
+
+    --bg: #10161d;
+    --surface: #18212b;
+    --surface-2: #1d2732;
+    --border: #273340;
+    --border-strong: #364453;
+    --text: #e4e9ef;
+    --text-muted: #9aa7b5;
+    --text-subtle: #7d8b9a;
+
+    --topbar-bg: #18212b;
+    --topbar-border: #273340;
+
+    --sidebar-bg: #0e151d;
+    --sidebar-hover: #17212c;
+    --sidebar-active: #1c2936;
+    --sidebar-border: #1d2833;
+
+    --table-head: #1f2a35;
+    --row-hover: #1c2834;
+    --input-bg: #121a22;
+    --code-bg: #121a22;
+
+    --ok: #3cc47a;
+    --ok-soft: rgba(60, 196, 122, 0.14);
+    --warn: #f0a43a;
+    --warn-soft: rgba(240, 164, 58, 0.14);
+    --err: #f0625d;
+    --err-soft: rgba(240, 98, 93, 0.15);
+    --info-soft: rgba(31, 177, 234, 0.12);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5);
+    --scrim: rgba(0, 0, 0, 0.55);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --accent: #1fb1ea;
+  --accent-text: #4cc3f0;
+  --accent-soft: rgba(31, 177, 234, 0.16);
+  --btn-primary-bg: #1fb1ea;
+  --btn-primary-hover: #4cc3f0;
+  --btn-primary-text: #05202c;
+  --focus-ring: 0 0 0 3px rgba(31, 177, 234, 0.4);
+
+  --bg: #10161d;
+  --surface: #18212b;
+  --surface-2: #1d2732;
+  --border: #273340;
+  --border-strong: #364453;
+  --text: #e4e9ef;
+  --text-muted: #9aa7b5;
+  --text-subtle: #7d8b9a;
+
+  --topbar-bg: #18212b;
+  --topbar-border: #273340;
+
+  --sidebar-bg: #0e151d;
+  --sidebar-hover: #17212c;
+  --sidebar-active: #1c2936;
+  --sidebar-border: #1d2833;
+
+  --table-head: #1f2a35;
+  --row-hover: #1c2834;
+  --input-bg: #121a22;
+  --code-bg: #121a22;
+
+  --ok: #3cc47a;
+  --ok-soft: rgba(60, 196, 122, 0.14);
+  --warn: #f0a43a;
+  --warn-soft: rgba(240, 164, 58, 0.14);
+  --err: #f0625d;
+  --err-soft: rgba(240, 98, 93, 0.15);
+  --info-soft: rgba(31, 177, 234, 0.12);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5);
+  --scrim: rgba(0, 0, 0, 0.55);
+}
+
+:root.sidebar-collapsed {
+  --sidebar-w: var(--sidebar-w-closed);
+}
