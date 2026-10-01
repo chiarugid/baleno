@@ -6,6 +6,7 @@ import { calcVoip, formatRate } from '../js/tools/voip-bw.js';
 import { parseSip, EXAMPLES as SIP_EXAMPLES } from '../js/tools/sip-parser.js';
 import { findCode, filterCodes, q850For, reasonHeader, codeClass } from '../js/tools/sip-codes.js';
 import { SIP_CODES, Q850, SIP_TO_Q850, Q850_TO_SIP } from '../data/sip-codes.js';
+import { dscpInfo, parseValue, findPoint, TABLE_ROWS } from '../js/tools/dscp.js';
 
 let passed = 0;
 let failed = 0;
@@ -565,6 +566,79 @@ test('mappatura Q.850 → SIP (RFC 3398)', () => {
     assert.ok(Q850[r.cause], `causa ${r.cause} senza nome`);
     if (r.sip != null) assert.ok(findCode(r.sip), `risposta ${r.sip} non in elenco`);
   }
+});
+
+console.log('DSCP');
+
+test('EF = 46 = 101110 = 0x2E, ToS 0xB8 (184), CoS 5', () => {
+  const ef = dscpInfo(46);
+  assert.equal(ef.name, 'EF');
+  assert.equal(ef.bin, '101110');
+  assert.equal(ef.hex, '0x2E');
+  assert.equal(ef.tos, 184);
+  assert.equal(ef.tosHex, '0xB8');
+  assert.equal(ef.tosBin, '10111000');
+  assert.equal(ef.precedence, 5);
+  assert.equal(ef.precedenceName, 'Critical');
+  assert.equal(ef.cos, 5);
+  assert.equal(ef.af, null);
+});
+
+test('AF: classe e probabilità di scarto', () => {
+  assert.deepEqual(dscpInfo(34).af, { cls: 4, drop: 1, dropName: 'bassa' });
+  assert.deepEqual(dscpInfo(14).af, { cls: 1, drop: 3, dropName: 'alta' });
+  assert.equal(dscpInfo(34).tosHex, '0x88');
+  assert.equal(dscpInfo(26).tos, 104);
+  assert.equal(dscpInfo(24).af, null, 'CS3 non è AF');
+  assert.equal(dscpInfo(40).af, null, 'CS5 non è AF');
+});
+
+test('valori di riferimento della tabella', () => {
+  const by = Object.fromEntries(TABLE_ROWS.map((r) => [r.name, r]));
+  assert.equal(by.CS0.tos, 0);
+  assert.equal(by.CS1.tosHex, '0x20');
+  assert.equal(by.CS3.tos, 96);
+  assert.equal(by.CS5.tosHex, '0xA0');
+  assert.equal(by.CS6.tos, 192);
+  assert.equal(by.CS7.tosHex, '0xE0');
+  assert.equal(by.LE.dscp, 1);
+  assert.equal(by['VOICE-ADMIT'].dscp, 44);
+  assert.equal(by.AF41.cos, 4);
+  const names = TABLE_ROWS.map((r) => r.name);
+  for (const n of ['CS0', 'CS1', 'CS2', 'CS3', 'CS4', 'CS5', 'CS6', 'CS7', 'EF', 'AF11', 'AF12', 'AF13', 'AF21', 'AF22', 'AF23', 'AF31', 'AF32', 'AF33', 'AF41', 'AF42', 'AF43']) {
+    assert.ok(names.includes(n), `manca ${n}`);
+  }
+  const dscps = TABLE_ROWS.map((r) => r.dscp);
+  assert.equal(new Set(dscps).size, dscps.length);
+  // il nome AFxy deve coincidere con classe e scarto calcolati
+  for (const r of TABLE_ROWS.filter((x) => x.name.startsWith('AF'))) {
+    assert.equal(r.name, `AF${r.af.cls}${r.af.drop}`);
+  }
+});
+
+test('conversione da DSCP, ToS, precedenza e nome', () => {
+  assert.deepEqual(parseValue('46'), { ok: true, dscp: 46, ecn: 0, from: 'dscp' });
+  assert.equal(parseValue('0x2E').dscp, 46);
+  assert.equal(parseValue('0b101110').dscp, 46);
+  assert.equal(parseValue('101110b').dscp, 46);
+  assert.deepEqual(parseValue('0xB8', 'tos'), { ok: true, dscp: 46, ecn: 0, from: 'tos' });
+  assert.deepEqual(parseValue('185', 'tos'), { ok: true, dscp: 46, ecn: 1, from: 'tos' });
+  assert.equal(dscpInfo(46, 3).ecnName, 'CE (congestione)');
+  assert.equal(parseValue('5', 'prec').dscp, 40);
+  assert.equal(parseValue('ef').dscp, 46);
+  assert.equal(parseValue('AF 41').dscp, 34);
+  assert.equal(parseValue('DF').dscp, 0);
+  assert.equal(findPoint('be').dscp, 0);
+});
+
+test('valori non validi o non standard', () => {
+  assert.equal(parseValue('64').ok, false);
+  assert.equal(parseValue('256', 'tos').ok, false);
+  assert.equal(parseValue('8', 'prec').ok, false);
+  assert.equal(parseValue('XYZ').ok, false);
+  assert.equal(parseValue('').ok, false);
+  assert.equal(parseValue('2e').ok, false);
+  assert.equal(dscpInfo(45).name, null);
 });
 
 console.log(`\n${passed} superati, ${failed} falliti`);

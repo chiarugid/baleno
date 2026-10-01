@@ -39,7 +39,8 @@ const TOOLS = [
   {
     id: 'dscp', section: 'qos', title: 'Tabella DSCP',
     description: 'DSCP, CoS, ToS e PHB in decimale, binario ed esadecimale, con ricerca.',
-    keywords: 'dscp cos tos phb ef af cs qos marcatura precedenza',
+    keywords: 'dscp cos tos phb ef af cs qos marcatura precedenza ecn traffic class 802.1p',
+    load: () => import('./tools/dscp.js'),
   },
   {
     id: 'mac', section: 'l2', title: 'Convertitore MAC',
