@@ -28,6 +28,7 @@ const TOOLS = [
     id: 'sip', section: 'voce', title: 'Parser SIP',
     description: 'Scompone messaggi SIP e SDP ed evidenzia le anomalie più comuni.',
     keywords: 'sip sdp invite header codec media rtp content-length',
+    load: () => import('./tools/sip-parser.js'),
   },
   {
     id: 'dscp', section: 'qos', title: 'Tabella DSCP',

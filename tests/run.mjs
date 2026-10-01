@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import * as subnet from '../js/tools/subnet.js';
 import { calcVoip, formatRate } from '../js/tools/voip-bw.js';
+import { parseSip, EXAMPLES as SIP_EXAMPLES } from '../js/tools/sip-parser.js';
 
 let passed = 0;
 let failed = 0;
@@ -305,6 +306,112 @@ test('per direzione e bidirezionale', () => {
   assert.equal(both.pps, 100);
   assert.equal(both.wireBytes, 218, 'la dimensione del pacchetto non cambia');
   assert.equal(formatRate(both.kbpsTotal), '1,74 Mbps');
+});
+
+console.log('Parser SIP');
+
+const issuesOf = (msg, level) => msg.issues.filter((i) => !level || i.level === level).map((i) => i.message);
+const hasIssue = (msg, level, re) => assert.ok(issuesOf(msg, level).some((m) => re.test(m)), `atteso ${level} ${re}; trovati: ${JSON.stringify(issuesOf(msg))}`);
+
+test('esempio INVITE: struttura, SDP e nessuna anomalia', () => {
+  const m = parseSip(SIP_EXAMPLES.invite);
+  assert.equal(m.kind, 'request');
+  assert.equal(m.method, 'INVITE');
+  assert.equal(m.uri, 'sip:bob@biloxi.example.com');
+  assert.equal(m.headers.length, 12);
+  assert.equal(m.get('CSeq'), '1 INVITE');
+  assert.equal(m.contentLength, m.bodyBytes);
+  assert.deepEqual(issuesOf(m), []);
+  const media = m.sdp.media[0];
+  assert.equal(media.port, 49170);
+  assert.equal(media.effectiveConnection.address, '192.0.2.10');
+  assert.equal(media.effectiveDirection, 'sendrecv');
+  assert.equal(media.ptime, 20);
+  assert.deepEqual(media.codecs.map((c) => c.name), ['PCMU', 'PCMA', 'G729', 'telephone-event']);
+  assert.equal(media.codecs[2].fmtp, 'annexb=no');
+});
+
+test('esempi 200 OK e REGISTER senza anomalie', () => {
+  const ok = parseSip(SIP_EXAMPLES.ok200);
+  assert.equal(ok.kind, 'response');
+  assert.equal(ok.status, 200);
+  assert.equal(ok.reason, 'OK');
+  assert.equal(ok.statusClass, 'Successo');
+  assert.deepEqual(issuesOf(ok), []);
+  const reg = parseSip(SIP_EXAMPLES.register);
+  assert.equal(reg.method, 'REGISTER');
+  assert.equal(reg.sdp, null);
+  assert.deepEqual(issuesOf(reg), []);
+});
+
+test('esempio con anomalie: tutte rilevate', () => {
+  const m = parseSip(SIP_EXAMPLES.anomalie);
+  hasIssue(m, 'err', /Max-Forwards/);
+  hasIssue(m, 'err', /CSeq \(BYE\).*\(INVITE\)/);
+  hasIssue(m, 'err', /Content-Length 120 ma il corpo è di 133 byte/);
+  hasIssue(m, 'err', /dinamico 101 senza a=rtpmap/);
+  hasIssue(m, 'warn', /branch senza il prefisso z9hG4bK/);
+  hasIssue(m, 'warn', /From senza parametro tag/);
+  hasIssue(m, 'warn', /indirizzo media 192\.168\.1\.50 non pubblico/);
+  hasIssue(m, 'warn', /Contact con indirizzo 192\.168\.1\.50/);
+  hasIssue(m, 'warn', /SAVP.*senza a=crypto/);
+  hasIssue(m, 'info', /sendonly/);
+  hasIssue(m, 'info', /porta RTP dispari/);
+});
+
+test('fine riga CRLF o LF danno lo stesso Content-Length', () => {
+  const crlf = parseSip(SIP_EXAMPLES.invite.replace(/\n/g, '\r\n'));
+  assert.deepEqual(issuesOf(crlf), []);
+  assert.equal(crlf.bodyBytes, parseSip(SIP_EXAMPLES.invite).bodyBytes);
+});
+
+test('Content-Length maggiore del corpo: messaggio troncato', () => {
+  const m = parseSip(SIP_EXAMPLES.invite.replace(/Content-Length: \d+/, 'Content-Length: 900'));
+  hasIssue(m, 'err', /troncato/);
+});
+
+test('header compatti, continuazione su più righe e righe di log iniziali', () => {
+  const m = parseSip([
+    '12:00:01.123 Received from udp:192.0.2.1:5060',
+    'OPTIONS sip:pbx.example.com SIP/2.0',
+    'v: SIP/2.0/UDP 192.0.2.1:5060;branch=z9hG4bK1',
+    'f: <sip:mon@example.com>;tag=1',
+    't: <sip:pbx.example.com>',
+    'i: abc@192.0.2.1',
+    'CSeq: 7 OPTIONS',
+    'Max-Forwards: 70',
+    'Subject: prima riga',
+    '  seconda riga',
+    'l: 0',
+  ].join('\n'));
+  assert.equal(m.method, 'OPTIONS');
+  assert.equal(m.get('Via'), 'SIP/2.0/UDP 192.0.2.1:5060;branch=z9hG4bK1');
+  assert.equal(m.headers[0].compact, true);
+  assert.equal(m.get('Subject'), 'prima riga seconda riga');
+  assert.deepEqual(issuesOf(m, 'err'), []);
+  assert.deepEqual(issuesOf(m, 'warn'), []);
+  hasIssue(m, 'info', /Ignorate 1 righe/);
+});
+
+test('risposta senza To tag, codice non valido, testo non SIP', () => {
+  const busy = parseSip(SIP_EXAMPLES.ok200.replace('200 OK', '486 Busy Here').replace(';tag=8321234356', '').split('\n\n')[0].replace(/Content-Length: \d+/, 'Content-Length: 0').replace(/Content-Type: .*\n/, ''));
+  assert.equal(busy.statusClass, 'Errore del client');
+  hasIssue(busy, 'warn', /486 con To senza tag/);
+  hasIssue(parseSip('SIP/2.0 999 Strano\nVia: x'), 'err', /fuori dall'intervallo/);
+  const junk = parseSip('ciao mondo');
+  assert.equal(junk.ok, false);
+  hasIssue(junk, 'err', /Start line non riconosciuta/);
+  assert.equal(parseSip('  \n ').empty, true);
+});
+
+test('SDP: hold con 0.0.0.0, IPv6 ULA, righe obbligatorie mancanti', () => {
+  const sdpMsg = (body) => parseSip(`INVITE sip:a@example.com SIP/2.0\nVia: SIP/2.0/UDP 192.0.2.1;branch=z9hG4bK1\nMax-Forwards: 70\nFrom: <sip:b@example.com>;tag=1\nTo: <sip:a@example.com>\nCall-ID: x\nCSeq: 1 INVITE\nContact: <sip:b@192.0.2.1>\nContent-Type: application/sdp\n\n${body}`);
+  hasIssue(sdpMsg('v=0\no=- 1 1 IN IP4 192.0.2.1\ns=-\nc=IN IP4 0.0.0.0\nt=0 0\nm=audio 4000 RTP/AVP 0'), 'info', /hold/);
+  hasIssue(sdpMsg('v=0\no=- 1 1 IN IP6 2001:db8::1\ns=-\nc=IN IP6 fd00::10\nt=0 0\nm=audio 4000 RTP/AVP 0'), 'warn', /fd00::10 non pubblico \(unique local/);
+  const missing = sdpMsg('v=0\nm=audio 4000 RTP/AVP 8');
+  hasIssue(missing, 'err', /manca la riga obbligatoria o=/);
+  hasIssue(missing, 'err', /nessuna riga c=/);
+  hasIssue(missing, 'warn', /senza Content-Length/);
 });
 
 console.log(`\n${passed} superati, ${failed} falliti`);

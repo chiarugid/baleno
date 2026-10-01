@@ -117,7 +117,7 @@ export function dataTable({
     for (let i = start; i < end; i++) {
       const row = rowAt(i);
       trs.push(h('tr', null, columns.map((col) => h('td', {
-        class: [col.align === 'right' ? 'num' : '', col.mono ? 'mono' : ''].join(' ').trim() || null,
+        class: [col.align === 'right' ? 'num' : '', col.mono ? 'mono' : '', col.wrap ? 'wrap' : ''].join(' ').trim() || null,
       }, cellText(col, row)))));
     }
     if (!trs.length) {
