@@ -8,6 +8,7 @@ const SECTIONS = [
   { id: 'indirizzamento', title: 'Indirizzamento', icon: 'network', description: 'Calcolo di reti, maschere e sottoreti IPv4 e IPv6.' },
   { id: 'voce', title: 'Voce', icon: 'phone', description: 'Dimensionamento della banda VoIP e analisi dei messaggi SIP.' },
   { id: 'qos', title: 'QoS', icon: 'qos', description: 'Marcature DSCP, CoS e ToS con i relativi PHB.' },
+  { id: 'wireless', title: 'Wireless', icon: 'wifi', description: 'Potenze RF, EIRP e budget di collegamento.' },
   { id: 'l2', title: 'Strumenti L2', icon: 'l2', description: 'Formati degli indirizzi MAC e produttori (OUI).' },
 ];
 
@@ -41,6 +42,12 @@ const TOOLS = [
     description: 'DSCP, CoS, ToS e PHB in decimale, binario ed esadecimale, con ricerca.',
     keywords: 'dscp cos tos phb ef af cs qos marcatura precedenza ecn traffic class 802.1p',
     load: () => import('./tools/dscp.js'),
+  },
+  {
+    id: 'potenza', section: 'wireless', title: 'dBm / mW / EIRP',
+    description: 'Conversione dBm ↔ mW ↔ W, EIRP con limiti ETSI indicativi e budget di collegamento in spazio libero.',
+    keywords: 'dbm mw watt eirp potenza antenna dbi fspl link budget wifi wi-fi rf etsi sensibilità',
+    load: () => import('./tools/rf-power.js'),
   },
   {
     id: 'mac', section: 'l2', title: 'Convertitore MAC',

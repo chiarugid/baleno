@@ -7,6 +7,7 @@ import { parseSip, EXAMPLES as SIP_EXAMPLES } from '../js/tools/sip-parser.js';
 import { findCode, filterCodes, q850For, reasonHeader, codeClass } from '../js/tools/sip-codes.js';
 import { SIP_CODES, Q850, SIP_TO_Q850, Q850_TO_SIP } from '../data/sip-codes.js';
 import { dscpInfo, parseValue, findPoint, TABLE_ROWS } from '../js/tools/dscp.js';
+import { dbmToMw, mwToDbm, eirp, fspl, linkBudget, bandCheck, parseNumber, formatPower, formatDistance } from '../js/tools/rf-power.js';
 import { parseMac, formatMac, lookupVendor, macInfo, specialAddress, eui64LinkLocal, extractMacs, OUI_COUNT } from '../js/tools/mac.js';
 
 let passed = 0;
@@ -749,6 +750,79 @@ test('estrazione da testo libero (show mac address-table)', () => {
     'serial 1234567890123 e hash 00505612ab34f non sono MAC',
   ].join('\n');
   assert.deepEqual(extractMacs(text).map((m) => m.hex), ['00505612AB34', '000B82AABBCC', '805EC0123456']);
+});
+
+console.log('dBm / mW / EIRP');
+
+const near = (actual, expected, tol, msg = '') => assert.ok(Math.abs(actual - expected) <= tol, `${msg} atteso ${expected} ± ${tol}, ottenuto ${actual}`);
+
+test('dBm → mW: 0 dBm = 1 mW, 20 dBm = 100 mW, 30 dBm = 1 W', () => {
+  near(dbmToMw(0), 1, 1e-12);
+  near(dbmToMw(20), 100, 1e-9);
+  near(dbmToMw(30), 1000, 1e-9);
+  near(dbmToMw(-30), 0.001, 1e-15);
+  near(dbmToMw(3), 1.99526, 1e-5);
+});
+
+test('mW → dBm e casi limite', () => {
+  near(mwToDbm(1), 0, 1e-12);
+  near(mwToDbm(100), 20, 1e-12);
+  near(mwToDbm(1000), 30, 1e-12);
+  near(mwToDbm(0.5), -3.0103, 1e-4);
+  assert.equal(mwToDbm(0), null);
+  assert.equal(mwToDbm(-1), null);
+  for (const x of [-90, -67, 0, 13.5, 36]) near(mwToDbm(dbmToMw(x)), x, 1e-9, `andata e ritorno ${x}`);
+});
+
+test('EIRP = Tx − perdita cavo + guadagno antenna', () => {
+  assert.equal(eirp(17, 1, 4), 20);
+  assert.equal(eirp(20, 0, 0), 20);
+  assert.equal(eirp(10, 3, 6), 13);
+});
+
+test('FSPL: 2400 MHz a 1 km ≈ 100 dB', () => {
+  near(fspl(1, 2400), 100.04, 0.01);
+  near(fspl(0.1, 5500), 87.25, 0.01);
+  near(fspl(2, 2400) - fspl(1, 2400), 6.02, 0.01, 'distanza doppia = +6 dB');
+  assert.equal(fspl(0, 2400), null);
+  assert.equal(fspl(1, 0), null);
+});
+
+test('budget di collegamento, margine e distanza massima', () => {
+  const lb = linkBudget({ eirpDbm: 20, distanceKm: 1, freqMHz: 2400, rxGainDbi: 2, rxLossDb: 1, sensitivityDbm: -82 });
+  near(lb.fspl, 100.04, 0.01);
+  near(lb.rxDbm, 20 - 100.044 + 2 - 1, 0.001);
+  near(lb.margin, lb.rxDbm + 82, 1e-9);
+  // alla distanza massima la potenza ricevuta coincide con la sensibilità
+  const atMax = linkBudget({ eirpDbm: 20, distanceKm: lb.maxDistanceKm, freqMHz: 2400, rxGainDbi: 2, rxLossDb: 1, sensitivityDbm: -82 });
+  near(atMax.margin, 0, 1e-9);
+  const noSens = linkBudget({ eirpDbm: 20, distanceKm: 1, freqMHz: 2400 });
+  assert.equal(noSens.margin, null);
+  assert.equal(noSens.maxDistanceKm, null);
+});
+
+test('limiti EIRP indicativi per banda', () => {
+  assert.equal(bandCheck(20, '2g4').ok, true);
+  assert.equal(bandCheck(20.5, '2g4').ok, false);
+  near(bandCheck(23, '2g4').excess, 3, 1e-12);
+  assert.equal(bandCheck(30, 'unii2c').ok, true);
+  assert.equal(bandCheck(23, 'lpi6').ok, true);
+  assert.equal(bandCheck(15, 'vlp6').ok, false);
+  assert.equal(bandCheck(20, ''), null);
+});
+
+test('input numerici e formattazione', () => {
+  assert.equal(parseNumber('20,5'), 20.5);
+  assert.equal(parseNumber('-67'), -67);
+  assert.equal(parseNumber('1e-3'), 0.001);
+  assert.equal(parseNumber('abc'), null);
+  assert.equal(parseNumber(''), null);
+  assert.equal(formatPower(1000), '1 W');
+  assert.equal(formatPower(100), '100 mW');
+  assert.equal(formatPower(0.001), '1 µW');
+  assert.equal(formatPower(dbmToMw(-67)), '199,526 pW');
+  assert.equal(formatDistance(0.05), '50 m');
+  assert.equal(formatDistance(1.5), '1,5 km');
 });
 
 console.log(`\n${passed} superati, ${failed} falliti`);
