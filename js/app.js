@@ -12,6 +12,7 @@ const SECTIONS = [
   { id: 'qos', icon: 'qos' },
   { id: 'wireless', icon: 'wifi' },
   { id: 'l2', icon: 'l2' },
+  { id: 'sicurezza', icon: 'key' },
 ];
 
 const TOOLS = [
@@ -24,6 +25,7 @@ const TOOLS = [
   { id: 'dscp', section: 'qos', load: () => import('./tools/dscp.js') },
   { id: 'potenza', section: 'wireless', load: () => import('./tools/rf-power.js') },
   { id: 'mac', section: 'l2', load: () => import('./tools/mac.js') },
+  { id: 'certificati', section: 'sicurezza', load: () => import('./tools/certs.js') },
 ];
 
 const sectionById = Object.fromEntries(SECTIONS.map((s) => [s.id, s]));

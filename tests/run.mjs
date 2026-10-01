@@ -1450,5 +1450,223 @@ test('valori corrotti e sessionStorage assente', () => {
   assert.equal(countVisit(local, fakeStorage({}, { failGet: true, failSet: true })), 3);
 });
 
+console.log('Decoder certificati');
+
+const asn1 = await import('../js/lib/asn1.js');
+const x509 = await import('../js/lib/x509.js');
+const certsUi = await import('../js/tools/certs.js');
+const { CERT_EXAMPLES } = await import('../data/cert-examples.js');
+const { readFileSync } = await import('node:fs');
+// fine riga normalizzate: su Windows git può estrarre i fixture con CRLF
+const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+const RSA_PEM = fixture('selfsigned.pem');
+const CA_PEM = fixture('ca-ec.pem');
+const CSR_PEM = fixture('request.csr');
+const NOW = new Date('2026-10-01T00:00:00Z');
+const one = (text, now = NOW) => {
+  const r = x509.decodeInput(text, now);
+  assert.equal(r.items.length, 1, 'un solo oggetto');
+  assert.ok(!r.items[0].error, `errore: ${r.items[0].error}`);
+  return r.items[0];
+};
+
+// Variante asincrona per le impronte (Web Crypto restituisce promesse).
+async function testAsync(name, fn) {
+  try {
+    await fn();
+    passed++;
+    console.log(`  ok    ${name}`);
+  } catch (err) {
+    failed++;
+    console.log(`  FAIL  ${name}\n        ${err.message.split('\n').join('\n        ')}`);
+  }
+}
+
+test('ASN.1: OID, lunghezze lunghe, UTCTime e annidamento eccessivo', () => {
+  assert.equal(asn1.decodeOid(Uint8Array.from([0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x0b])), '1.2.840.113549.1.1.11');
+  assert.equal(asn1.decodeOid(Uint8Array.from([0x55, 0x1d, 0x11])), '2.5.29.17');
+  assert.equal(asn1.decodeOid(Uint8Array.from([0x88, 0x37])), '2.999');
+  // OCTET STRING da 300 byte: lunghezza in forma lunga 82 01 2C
+  const big = new Uint8Array(304);
+  big.set([0x04, 0x82, 0x01, 0x2c]);
+  assert.equal(asn1.parseDocument(big).content.length, 300);
+  const utc = (s) => asn1.timeValue({ cls: 0, tag: 23, content: new TextEncoder().encode(s) }).toISOString();
+  assert.equal(utc('491231235959Z'), '2049-12-31T23:59:59.000Z');
+  assert.equal(utc('500101000000Z'), '1950-01-01T00:00:00.000Z', 'RFC 5280: YY >= 50 → 19YY');
+  const deep = new Uint8Array(80);
+  for (let i = 0; i < 40; i++) { deep[2 * i] = 0x30; deep[2 * i + 1] = 78 - 2 * i; }
+  assert.throws(() => asn1.parseDocument(deep), /nesting/);
+  assert.throws(() => asn1.parseDocument(Uint8Array.from([0x30, 0x05, 0x02, 0x01])), /truncated/);
+  assert.throws(() => asn1.parseDocument(Uint8Array.from([0x30, 0x80, 0x00, 0x00])), /indefinite/, 'BER a lunghezza indefinita');
+});
+
+test('certificato autofirmato RSA: CN, soggetto, emittente, serial, date', () => {
+  const c = one(RSA_PEM);
+  assert.equal(c.kind, 'cert');
+  assert.equal(c.version, 3);
+  assert.equal(c.commonName, 'test.rebluc.it');
+  assert.equal(x509.nameToString(c.subject), 'C=IT, ST=Toscana, L=Firenze, O=rebluc test, OU=Network, CN=test.rebluc.it');
+  assert.equal(x509.nameToString(c.issuer), x509.nameToString(c.subject));
+  assert.ok(c.selfIssued);
+  assert.equal(c.issuedBy, 0);
+  assert.equal(c.serial, '1A:2B:3C:4D:5E:6F');
+  assert.equal(c.serialDecimal, String(0x1a2b3c4d5e6f));
+  assert.equal(c.notBefore.toISOString(), '2026-01-01T00:00:00.000Z');
+  assert.equal(c.notAfter.toISOString(), '2036-01-01T00:00:00.000Z');
+  assert.equal(c.status, 'valid');
+  assert.equal(c.daysLeft, 3379, 'dal 1/10/2026 al 1/1/2036');
+  assert.equal(c.lifetimeDays, 3652);
+  assert.equal(c.signature.name, 'sha256WithRSAEncryption');
+  assert.equal(c.key.type, 'RSA');
+  assert.equal(c.key.bits, 2048);
+  assert.equal(c.key.exponent, 65537n);
+  assert.deepEqual(c.warnings, []);
+});
+
+test('certificato RSA: SAN, Key Usage, EKU, Basic Constraints, SKI/AKI', () => {
+  const c = one(RSA_PEM);
+  assert.deepEqual(c.san, [
+    { type: 'dns', value: 'test.rebluc.it' },
+    { type: 'dns', value: 'www.test.rebluc.it' },
+    { type: 'ip', value: '192.0.2.10' },
+    { type: 'ip', value: '2001:db8::10' },
+    { type: 'email', value: 'admin@test.rebluc.it' },
+  ]);
+  assert.deepEqual(c.keyUsage, ['digitalSignature', 'keyEncipherment']);
+  assert.deepEqual(c.extKeyUsage.map((e) => e.name), ['serverAuth', 'clientAuth']);
+  assert.deepEqual(c.basicConstraints, { ca: false, pathLen: null });
+  assert.equal(c.isCa, false);
+  assert.equal(c.ski, '7D:51:CE:D7:AE:E0:9F:47:E4:97:46:CF:A6:C3:4C:E2:DB:7D:B7:F4');
+  assert.equal(c.aki, c.ski);
+  const critical = c.extensions.filter((e) => e.critical).map((e) => e.name).sort();
+  assert.deepEqual(critical, ['basicConstraints', 'keyUsage']);
+});
+
+test('CA EC P-256: curva, CA con pathLen 0, keyCertSign', () => {
+  const c = one(CA_PEM);
+  assert.equal(c.commonName, 'rebluc Test Root CA');
+  assert.equal(c.serial, '07');
+  assert.equal(c.notBefore.toISOString(), '2025-06-01T12:00:00.000Z');
+  assert.equal(c.notAfter.toISOString(), '2030-06-01T12:00:00.000Z');
+  assert.equal(c.key.type, 'EC');
+  assert.equal(c.key.curve, 'P-256 (prime256v1)');
+  assert.equal(c.key.bits, 256);
+  assert.equal(c.signature.name, 'ecdsa-with-SHA256');
+  assert.deepEqual(c.basicConstraints, { ca: true, pathLen: 0 });
+  assert.deepEqual(c.keyUsage, ['keyCertSign', 'cRLSign']);
+  assert.equal(c.ski, 'BC:75:38:24:94:BA:BA:9C:72:00:F1:CA:15:FE:76:8E:4A:AA:29:50');
+  assert.deepEqual(c.san, []);
+  assert.deepEqual(c.warnings, [], 'una CA senza SAN non genera avvisi');
+});
+
+test('CSR PKCS#10: soggetto, SAN richiesti, chiave, firma', () => {
+  const r = one(CSR_PEM);
+  assert.equal(r.kind, 'csr');
+  assert.equal(r.version, 1);
+  assert.equal(x509.nameToString(r.subject), 'C=IT, O=rebluc test, OU=VoIP, CN=sbc.test.rebluc.it, emailAddress=voip@test.rebluc.it');
+  assert.equal(r.commonName, 'sbc.test.rebluc.it');
+  assert.deepEqual(r.san, [
+    { type: 'dns', value: 'sbc.test.rebluc.it' },
+    { type: 'dns', value: 'sip.test.rebluc.it' },
+    { type: 'ip', value: '203.0.113.5' },
+  ]);
+  assert.equal(r.key.type, 'RSA');
+  assert.equal(r.key.bits, 3072);
+  assert.equal(r.signature.name, 'sha256WithRSAEncryption');
+  assert.deepEqual(r.attributes, ['1.2.840.113549.1.9.14']);
+  assert.deepEqual(r.warnings, []);
+});
+
+await testAsync('impronte SHA-256 e SHA-1 sui byte DER (Web Crypto), pin SPKI', async () => {
+  const rsa = await x509.fingerprints(one(RSA_PEM));
+  assert.equal(rsa.sha256, 'E6:7A:3E:CF:72:21:88:CC:80:D3:95:24:25:16:B1:F7:D7:60:F1:7F:9E:6D:EE:35:87:45:C8:01:1B:D5:33:C3');
+  assert.equal(rsa.sha1, '7F:D2:AF:55:77:AA:8A:06:52:5A:03:B5:FA:D3:9E:97:2B:FE:84:83');
+  assert.equal(rsa.spkiSha256, 'bpVleQi6DApjl3AEmai3zrJY/2xMIh1J6EcxeAim9pA=');
+  const ca = await x509.fingerprints(one(CA_PEM));
+  assert.equal(ca.sha256, '4C:7A:A7:30:0D:EE:3E:D2:C8:14:48:94:3D:31:AE:B3:53:DF:E1:66:89:91:32:D4:21:C8:E0:7F:2F:DE:4A:C1');
+  assert.equal(ca.sha1, 'E4:EB:FB:2C:F0:8D:28:B9:BF:2C:85:DD:62:03:BF:3D:66:61:02:AE');
+  assert.equal(ca.spkiSha256, 'Q3raacX/2FRRXRxzyG830wLaORMWaIDk0e6YstyGQ0o=');
+  const csr = await x509.fingerprints(one(CSR_PEM));
+  assert.equal(csr.sha256, '08:32:83:29:17:43:66:EE:56:1E:9B:76:DA:5E:F7:AC:E4:F3:E8:06:E2:12:B6:D1:DE:F9:62:19:2E:02:25:01');
+});
+
+test('gli esempi della pagina coincidono con i fixture', () => {
+  const byId = Object.fromEntries(CERT_EXAMPLES.map((e) => [e.id, e.pem.trim()]));
+  assert.deepEqual(Object.keys(byId), ['rsa', 'ca', 'csr']);
+  assert.equal(byId.rsa, RSA_PEM.trim());
+  assert.equal(byId.ca, CA_PEM.trim());
+  assert.equal(byId.csr, CSR_PEM.trim());
+});
+
+test('catena, DER binario, base64 senza intestazioni, CRLF e testo attorno', () => {
+  const chain = x509.decodeInput(`subject=…\r\n${RSA_PEM.replace(/\n/g, '\r\n')}\nissuer=…\n${CA_PEM}`, NOW);
+  assert.equal(chain.items.length, 2);
+  assert.deepEqual(chain.items.map((i) => i.commonName), ['test.rebluc.it', 'rebluc Test Root CA']);
+  const der = asn1.base64ToBytes(RSA_PEM.replace(/-----[^-]+-----/g, ''));
+  assert.equal(der[0], 0x30);
+  assert.equal(x509.decodeInput(der, NOW).items[0].serial, '1A:2B:3C:4D:5E:6F', 'file .der');
+  assert.equal(x509.decodeInput(new TextEncoder().encode(CSR_PEM), NOW).items[0].kind, 'csr', 'file .csr di testo');
+  assert.equal(one(RSA_PEM.replace(/-----[^-]+-----/g, '')).commonName, 'test.rebluc.it', 'base64 nudo');
+  assert.equal(x509.parsePem(certsUi.derToPem(der)).blocks[0].der.length, der.length, 'DER → PEM → DER');
+});
+
+test('stato temporale: scaduto, non ancora valido, in scadenza', () => {
+  const expired = one(RSA_PEM, new Date('2036-03-01T00:00:00Z'));
+  assert.equal(expired.status, 'expired');
+  assert.equal(expired.daysLeft, -60);
+  assert.deepEqual(expired.warnings.map((w) => w.code), ['expired']);
+  const early = one(RSA_PEM, new Date('2025-12-31T00:00:00Z'));
+  assert.equal(early.status, 'notYetValid');
+  assert.deepEqual(early.warnings.map((w) => w.code), ['notYetValid']);
+  const soon = one(RSA_PEM, new Date('2035-12-22T00:00:00Z'));
+  assert.equal(soon.status, 'valid');
+  assert.deepEqual(soon.warnings, [{ code: 'expiresSoon', days: 10 }]);
+});
+
+test('chiavi private mai decodificate, blocchi non supportati ed errori', () => {
+  const pk = x509.decodeInput(`-----BEGIN PRIVATE KEY-----\nMIIBVQIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEA\n-----END PRIVATE KEY-----\n${CA_PEM}`, NOW);
+  assert.ok(pk.privateKey);
+  assert.equal(pk.items.length, 1, 'la chiave non diventa un elemento');
+  assert.equal(pk.items[0].commonName, 'rebluc Test Root CA');
+  assert.ok(x509.decodeInput('-----BEGIN EC PRIVATE KEY-----\nMHcCAQEE', NOW).privateKey, 'chiave incompleta');
+  assert.deepEqual(x509.decodeInput('-----BEGIN PUBLIC KEY-----\nAAAA\n-----END PUBLIC KEY-----', NOW).unsupported, ['PUBLIC KEY']);
+  const err = (text) => x509.decodeInput(text, NOW).items[0]?.error;
+  assert.equal(err('ciao, non sono un certificato'), 'notPem');
+  assert.equal(err('-----BEGIN CERTIFICATE-----\nMIIB'), 'pemIncomplete');
+  assert.equal(err('-----BEGIN CERTIFICATE-----\n!!!!\n-----END CERTIFICATE-----'), 'base64');
+  const truncated = RSA_PEM.replace(/-----[^-]+-----/g, '').replace(/\s/g, '').slice(0, 400);
+  assert.equal(err(`-----BEGIN CERTIFICATE-----\n${truncated}\n-----END CERTIFICATE-----`), 'asn1');
+  // DER valido ma non un certificato: SEQUENCE { INTEGER 1 }
+  assert.equal(x509.decodeInput(Uint8Array.from([0x30, 0x03, 0x02, 0x01, 0x01]), NOW).items[0].error, 'structure');
+  assert.deepEqual(x509.decodeInput('', NOW).items, []);
+});
+
+test('in inglese i testi del decoder non contengono italiano', () => {
+  const codes = ['expired', 'notYetValid', 'expiresSoon', 'longLifetime', 'weakSig', 'weakSigRoot', 'sigMismatch', 'smallKey', 'oldVersion', 'noSan', 'noSanCsr', 'challengePassword', 'caNoCertSign', 'certSignNotCa', 'extError', 'unknownCritical'];
+  const item = one(RSA_PEM);
+  const texts = () => [
+    ...codes.map((code) => certsUi.warningText({ code, days: 0, alg: 'sha1WithRSAEncryption', bits: 1024, version: 1, ext: 'x' }, item)),
+    certsUi.warningText({ code: 'expiresSoon', days: 1 }, item),
+    certsUi.warningText({ code: 'expiresSoon', days: 12 }, item),
+    ...['base64', 'pemIncomplete', 'notPem', 'asn1', 'structure'].map((error) => certsUi.errorText({ error })),
+    certsUi.statusText(item), certsUi.keyText(item.key), certsUi.fmtDate(item.notAfter),
+  ];
+  const it = texts();
+  assert.ok(it.every((s) => !/^cert\./.test(s)), `chiave mancante: ${it.find((s) => /^cert\./.test(s))}`);
+  assert.equal(certsUi.fmtDate(item.notAfter), '01 gen 2036, 00:00 UTC');
+  setLang('en');
+  try {
+    const en = texts();
+    assert.ok(en.every((s) => !/^cert\./.test(s)));
+    const offenders = en.filter((s) => italianIn(s));
+    assert.deepEqual(offenders, []);
+    assert.equal(certsUi.fmtDate(item.notAfter), '01 Jan 2036, 00:00 UTC');
+    assert.equal(certsUi.warningText({ code: 'expiresSoon', days: 1 }, item), 'Expires in 1 day.');
+    assert.equal(certsUi.keyText(one(CSR_PEM).key), 'RSA 3,072 bit');
+  } finally {
+    setLang('it');
+  }
+});
+
 console.log(`\n${passed} superati, ${failed} falliti`);
 process.exit(failed ? 1 : 0);

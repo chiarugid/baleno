@@ -583,3 +583,33 @@ fieldset.field--plain legend { padding: 0; margin-bottom: 4px; }
 .notes--flush { margin: 0; }
 .dashlet__bar .notes { flex: 1 1 320px; }
 .note .badge { margin-right: 4px; vertical-align: 1px; }
+
+/* ---------- Decoder certificati ---------- */
+
+.cert-grid { display: grid; gap: 0 24px; }
+@media (min-width: 900px) {
+  .cert-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+.cert-col { min-width: 0; }
+.cert-issued { margin: 0 0 6px; color: var(--text-muted); font-size: var(--fs-sm); }
+.cert-lines { display: flex; flex-direction: column; }
+.cert-copy { display: flex; align-items: flex-start; gap: 4px; }
+.cert-copy__text { flex: 1; min-width: 0; overflow-wrap: anywhere; padding-top: 2px; }
+.cert-copy .icon-btn { margin: -4px -6px -4px 0; }
+.link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.link-btn:hover { text-decoration: underline; }
+/* su schermi stretti etichetta sopra e valore sotto: impronte e identificativi restano leggibili */
+@media (max-width: 599px) {
+  .cert-col .kv { grid-template-columns: minmax(0, 1fr); }
+  .cert-col .kv dt { padding-bottom: 0; border-bottom: 0; }
+  .cert-col .kv dd { padding-top: 2px; }
+  .cert-item .kpi__value { font-size: 18px; }
+}

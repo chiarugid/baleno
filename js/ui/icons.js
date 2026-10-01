@@ -7,6 +7,7 @@ const paths = {
   qos: '<path d="M3 21h18"/><path d="M6 21v-5M11 21V10M16 21V6M21 21V3" />',
   l2: '<rect x="3" y="4.5" width="18" height="15" rx="1.5"/><path d="M8 15.5v-4h2v-2h4v2h2v4z"/>',
   wifi: '<path d="M2 8.8a15 15 0 0 1 20 0M5.2 12.3a10.5 10.5 0 0 1 13.6 0M8.5 15.8a5.5 5.5 0 0 1 7 0"/><circle cx="12" cy="19.3" r="1.1"/>',
+  key: '<circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3L21 2M17 6l3 3M14 9l2.5 2.5"/>',
   menu: '<path d="M3 6h18M3 12h18M3 18h18"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',

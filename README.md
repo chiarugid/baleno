@@ -11,6 +11,7 @@ Strumenti di rete e VoIP che girano interamente nel browser, pubblicati su [www.
 - **Tester pattern CUCM**: route/translation pattern (X, !, [2-9], [^…], ., #, *, \+, ?, +) contro un numero chiamato, con Discard Digits (PreDot, Trailing-#), strip, transform mask e prefisso spiegati passo per passo; macro @ dichiarata non supportata
 - **dBm / mW / EIRP**: conversioni di potenza, EIRP con limiti ETSI indicativi, budget di collegamento in spazio libero (FSPL, margine, distanza massima)
 - **Convertitore MAC**: formati Cisco, due punti, trattini, senza separatori; produttore da un sottoinsieme OUI locale; indirizzi speciali (HSRP, VRRP, multicast…); conversione multipla
+- **Decoder certificati**: certificati X.509 e CSR PKCS#10 in PEM o DER (anche catene e file): soggetto, emittente, validità e giorni rimanenti, serial, algoritmi di firma e chiave, SAN, Key Usage, EKU, Basic Constraints, SKI/AKI, CRL/OCSP, impronte SHA-1/SHA-256 e pin SPKI; avvisi su scadenza, firme deboli e SAN mancanti. Parser DER scritto per il sito (`js/lib/`), impronte con Web Crypto; le chiavi private incollate vengono segnalate e mai lette
 
 HTML, CSS e JavaScript vanilla: nessun build step, nessun backend, nessuna chiamata esterna, nessun tracking.
 
@@ -38,11 +39,13 @@ poi apri <http://localhost:8000>.
 
 ## Test
 
-I calcoli si verificano con Node 18 o successivo, senza dipendenze:
+I calcoli si verificano con Node 20 o successivo (serve Web Crypto globale), senza dipendenze:
 
 ```sh
 node tests/run.mjs
 ```
+
+`tests/fixtures/` contiene un certificato RSA autofirmato, una CA EC P-256 e una CSR di prova generati con OpenSSL (le chiavi private non sono nel repo); i test ne verificano campi e impronte attese.
 
 ## Dati OUI
 
@@ -61,9 +64,10 @@ js/app.js      navigazione, tema, lingua, ricerca strumenti
 js/i18n.js     dizionario italiano/inglese e funzioni t()
 js/visits.js   contatore visite locale
 js/ui/         componenti condivisi (dashlet, tabella, icone)
+js/lib/        parser ASN.1/DER e X.509
 js/tools/      un modulo per strumento: funzioni di calcolo + interfaccia
 data/          tabelle statiche
 fonts/         Inter (SIL OFL 1.1)
-tests/         test dei calcoli
+tests/         test dei calcoli e fixture dei certificati
 scripts/       generazione dei dati (OUI)
 ```
