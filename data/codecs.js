@@ -26,11 +26,27 @@ export const HEADERS = {
   espTrailer: 2, // pad length + next header
 };
 
-// ESP: IV, ICV (autenticazione) e allineamento del blocco cifrato.
-export const IPSEC = [
+// SRTP (RFC 3711): authentication tag in coda al pacchetto RTP, MKI non usato.
+export const SRTP = [
+  { id: 'none', label: 'Nessuno', tag: 0 },
+  { id: 'sha1-80', label: 'AES-CM + HMAC-SHA1-80', tag: 10 },
+  { id: 'sha1-32', label: 'AES-CM + HMAC-SHA1-32', tag: 4 },
+];
+
+// IPsec ESP: modalità, cifratura (IV e allineamento del blocco) e integrità (ICV).
+export const IPSEC_MODES = [
   { id: 'none', label: 'Nessuno' },
-  { id: 'tunnel-cbc', label: 'ESP tunnel · AES-CBC + HMAC-SHA1-96', mode: 'tunnel', iv: 16, icv: 12, block: 16 },
-  { id: 'tunnel-gcm', label: 'ESP tunnel · AES-GCM-128', mode: 'tunnel', iv: 8, icv: 16, block: 4 },
-  { id: 'transport-cbc', label: 'ESP transport · AES-CBC + HMAC-SHA1-96', mode: 'transport', iv: 16, icv: 12, block: 16 },
-  { id: 'transport-gcm', label: 'ESP transport · AES-GCM-128', mode: 'transport', iv: 8, icv: 16, block: 4 },
+  { id: 'tunnel', label: 'ESP tunnel' },
+  { id: 'transport', label: 'ESP transport' },
+];
+
+export const IPSEC_CIPHERS = [
+  { id: 'cbc', label: 'AES-CBC', iv: 16, block: 16 },
+  // GCM è AEAD: l'ICV da 16 B è parte dell'algoritmo, nessuna HMAC separata.
+  { id: 'gcm', label: 'AES-GCM-128', iv: 8, block: 4, icv: 16 },
+];
+
+export const IPSEC_INTEGRITY = [
+  { id: 'sha1', label: 'HMAC-SHA1-96', icv: 12 },
+  { id: 'sha256', label: 'HMAC-SHA-256-128', icv: 16 },
 ];

@@ -226,7 +226,7 @@ test('802.1Q (+4 B) e preambolo + IFG (+20 B)', () => {
 });
 
 test('IPsec ESP tunnel AES-CBC/SHA1: padding a 16 B', () => {
-  const r = calcVoip({ ipsec: 'tunnel-cbc' });
+  const r = calcVoip({ ipsec: 'tunnel', cipher: 'cbc' });
   // 200 + 2 trailer = 202 -> 208; 20 IP + 8 ESP + 16 IV + 208 + 12 ICV = 264
   assert.equal(r.l3Bytes, 264);
   assert.equal(r.wireBytes, 282);
@@ -234,17 +234,17 @@ test('IPsec ESP tunnel AES-CBC/SHA1: padding a 16 B', () => {
 });
 
 test('IPsec ESP tunnel AES-GCM e NAT-T', () => {
-  assert.equal(calcVoip({ ipsec: 'tunnel-gcm' }).l3Bytes, 256);
-  assert.equal(calcVoip({ ipsec: 'tunnel-gcm', natt: true }).l3Bytes, 264);
+  assert.equal(calcVoip({ ipsec: 'tunnel', cipher: 'gcm' }).l3Bytes, 256);
+  assert.equal(calcVoip({ ipsec: 'tunnel', cipher: 'gcm', natt: true }).l3Bytes, 264);
   assert.equal(calcVoip({ natt: true }).l3Bytes, 200, 'NAT-T ignorato senza IPsec');
 });
 
 test('GRE e GRE + IPsec transport (stile DMVPN)', () => {
   assert.equal(calcVoip({ gre: true }).l3Bytes, 224);
   // GRE 224; transport protegge 204 + 2 = 206 -> 208 (blocco 4); 20 + 8 + 8 + 208 + 16 = 260
-  assert.equal(calcVoip({ gre: true, ipsec: 'transport-gcm' }).l3Bytes, 260);
+  assert.equal(calcVoip({ gre: true, ipsec: 'transport', cipher: 'gcm' }).l3Bytes, 260);
   // CBC: 206 -> 208 (blocco 16); 20 + 8 + 16 + 208 + 12 = 264
-  assert.equal(calcVoip({ gre: true, ipsec: 'transport-cbc' }).l3Bytes, 264);
+  assert.equal(calcVoip({ gre: true, ipsec: 'transport', cipher: 'cbc' }).l3Bytes, 264);
 });
 
 test('Opus a bitrate scelto e N chiamate', () => {
@@ -262,6 +262,49 @@ test('input non validi', () => {
   assert.equal(calcVoip({ calls: 2.5 }).field, 'calls');
   assert.equal(calcVoip({ codec: 'opus', bitrate: 4 }).field, 'bitrate');
   assert.equal(calcVoip({ ipsec: 'xyz' }).field, 'ipsec');
+  assert.equal(calcVoip({ ipsec: 'tunnel', integrity: 'md5' }).field, 'ipsec');
+  assert.equal(calcVoip({ srtp: 'sha1-64' }).field, 'srtp');
+});
+
+test('SRTP HMAC-SHA1-80 (+10 B) e HMAC-SHA1-32 (+4 B)', () => {
+  const s80 = calcVoip({ srtp: 'sha1-80' });
+  assert.equal(s80.l3Bytes, 210);
+  assert.equal(s80.wireBytes, 228);
+  close(s80.kbpsPerCall, 91.2);
+  const s32 = calcVoip({ srtp: 'sha1-32' });
+  assert.equal(s32.wireBytes, 222);
+  close(s32.kbpsPerCall, 88.8);
+  close(calcVoip({ codec: 'g729', srtp: 'sha1-80' }).kbpsPerCall, 35.2);
+  assert.equal(calcVoip({ srtp: 'none' }).wireBytes, 218);
+});
+
+test('SRTP dentro IPsec: il tag entra nel padding ESP', () => {
+  // 210 + 2 = 212 -> 224 (blocco 16); 20 + 8 + 16 + 224 + 12 = 280
+  assert.equal(calcVoip({ srtp: 'sha1-80', ipsec: 'tunnel', cipher: 'cbc' }).l3Bytes, 280);
+});
+
+test('integrità IPsec selezionabile: SHA1-96 = 12 B, SHA-256-128 = 16 B', () => {
+  const sha1 = calcVoip({ ipsec: 'tunnel', cipher: 'cbc', integrity: 'sha1' });
+  const sha256 = calcVoip({ ipsec: 'tunnel', cipher: 'cbc', integrity: 'sha256' });
+  assert.equal(sha1.l3Bytes, 264);
+  assert.equal(sha256.l3Bytes, 268);
+  close(sha256.kbpsPerCall, 114.4);
+  assert.match(sha256.layers.find((l) => l.id === 'ipsec').detail, /ICV 16 \(HMAC-SHA-256-128\)/);
+  assert.match(sha1.layers.find((l) => l.id === 'ipsec').detail, /ICV 12 \(HMAC-SHA1-96\)/);
+  assert.equal(sha256.ipsecLabel, 'ESP tunnel · AES-CBC + HMAC-SHA-256-128');
+  // GCM ha integrità propria: la scelta HMAC non cambia il risultato
+  assert.equal(calcVoip({ ipsec: 'tunnel', cipher: 'gcm', integrity: 'sha256' }).l3Bytes, 256);
+});
+
+test('per direzione e bidirezionale', () => {
+  const one = calcVoip({ calls: 10 });
+  const both = calcVoip({ calls: 10, bidirectional: true });
+  close(one.kbpsPerCall, 87.2);
+  close(both.kbpsPerCall, 174.4);
+  close(both.kbpsTotal, 1744);
+  assert.equal(both.pps, 100);
+  assert.equal(both.wireBytes, 218, 'la dimensione del pacchetto non cambia');
+  assert.equal(formatRate(both.kbpsTotal), '1,74 Mbps');
 });
 
 console.log(`\n${passed} superati, ${failed} falliti`);

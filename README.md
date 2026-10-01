@@ -3,7 +3,7 @@
 Strumenti di rete e VoIP che girano interamente nel browser, pubblicati su [www.rebluc.it](https://www.rebluc.it) tramite GitHub Pages.
 
 - **Calcolatore subnet** IPv4/IPv6: rete, broadcast, range host, wildcard, suddivisione in sottoreti
-- **Calcolatore banda VoIP**: codec, packetization e overhead (Ethernet, 802.1Q, preambolo, GRE, IPsec, NAT-T), per chiamata e per N chiamate
+- **Calcolatore banda VoIP**: codec, packetization e overhead (SRTP, Ethernet, 802.1Q, preambolo, GRE, IPsec, NAT-T), per direzione o bidirezionale
 - **Parser SIP**: request/status line, header, SDP e anomalie comuni *(in sviluppo)*
 - **Tabella DSCP/CoS/ToS** con PHB e uso tipico *(in sviluppo)*
 - **Convertitore MAC** con lookup vendor OUI locale *(in sviluppo)*
