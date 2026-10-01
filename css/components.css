@@ -371,3 +371,86 @@ fieldset.group legend { padding: 0 6px; font-size: var(--fs-sm); font-weight: 60
   pointer-events: none;
 }
 .toast.is-visible { opacity: 1; translate: 0 0; }
+
+/* ---------- Controlli segmentati e checkbox ---------- */
+
+fieldset.field--plain { margin: 0 0 14px; padding: 0; border: 0; min-width: 0; }
+fieldset.field--plain legend { padding: 0; margin-bottom: 4px; }
+
+.segmented {
+  display: flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.segmented label { position: relative; flex: 1; }
+.segmented input { position: absolute; opacity: 0; pointer-events: none; }
+.segmented span {
+  display: block;
+  height: 30px;
+  padding: 0 8px;
+  border-left: 1px solid var(--border-strong);
+  background: var(--input-bg);
+  font-weight: 550;
+  line-height: 30px;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.segmented label:first-child span { border-left: 0; }
+.segmented span:hover { background: var(--surface-2); }
+.segmented input:checked + span { background: var(--btn-primary-bg); color: var(--btn-primary-text); }
+.segmented input:focus-visible + span { box-shadow: inset var(--focus-ring); }
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+.check input { width: 15px; height: 15px; margin: 2px 0 0; accent-color: var(--btn-primary-bg); flex: none; }
+.check small { margin-left: 6px; color: var(--text-muted); font-size: var(--fs-xs); }
+.check:has(input:disabled) { opacity: 0.5; cursor: default; }
+
+/* ---------- KPI ---------- */
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1px;
+  margin-bottom: 14px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.kpi { padding: 10px 14px; background: var(--surface-2); }
+.kpi__label { color: var(--text-muted); font-size: var(--fs-xs); font-weight: 550; }
+.kpi__value { font-size: 22px; font-weight: 650; letter-spacing: -0.01em; line-height: 1.3; }
+.kpi__value small { margin-left: 4px; color: var(--text-muted); font-size: var(--fs-sm); font-weight: 500; }
+.kpi--hl .kpi__value { color: var(--accent-text); }
+
+/* ---------- Barra di composizione ---------- */
+
+.stack {
+  display: flex;
+  gap: 2px;
+  height: 18px;
+  margin-bottom: 10px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.stack .seg { flex-basis: 0; min-width: 3px; }
+.seg-payload { background: var(--accent); }
+.seg-1 { background: color-mix(in srgb, var(--text-subtle) 95%, var(--surface)); }
+.seg-2 { background: color-mix(in srgb, var(--text-subtle) 80%, var(--surface)); }
+.seg-3 { background: color-mix(in srgb, var(--text-subtle) 65%, var(--surface)); }
+.seg-4 { background: color-mix(in srgb, var(--text-subtle) 50%, var(--surface)); }
+.seg-5 { background: color-mix(in srgb, var(--text-subtle) 38%, var(--surface)); }
+.seg-6 { background: color-mix(in srgb, var(--text-subtle) 28%, var(--surface)); }
+.swatch { display: inline-block; width: 10px; height: 10px; margin-right: 8px; border-radius: 2px; vertical-align: -1px; }
+
+.table--plain { border: 1px solid var(--border); border-radius: var(--radius); }
+.table--plain td { white-space: normal; }
+.table .total-row td { font-weight: 650; background: var(--surface-2); }

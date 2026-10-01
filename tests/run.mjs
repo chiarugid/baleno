@@ -2,6 +2,7 @@
 
 import assert from 'node:assert/strict';
 import * as subnet from '../js/tools/subnet.js';
+import { calcVoip, formatRate } from '../js/tools/voip-bw.js';
 
 let passed = 0;
 let failed = 0;
@@ -189,6 +190,78 @@ test('suddivisione IPv4 grande: /8 in /30 (righe calcolate al volo)', () => {
   const s = subdivide(calc('10.0.0.0/8'), 'prefix', '30');
   assert.equal(s.count, 4194304);
   assert.equal(s.getRow(4194303).network, '10.255.255.252/30');
+});
+
+console.log('Banda VoIP');
+
+const close = (actual, expected, msg) => assert.ok(Math.abs(actual - expected) < 1e-9, `${msg ?? ''} atteso ${expected}, ottenuto ${actual}`);
+
+test('G.711 20 ms su Ethernet = 87,2 kbps', () => {
+  const r = calcVoip({ codec: 'g711', ptime: 20 });
+  assert.equal(r.payload, 160);
+  assert.equal(r.l3Bytes, 200);
+  assert.equal(r.wireBytes, 218);
+  assert.equal(r.pps, 50);
+  close(r.kbpsL3, 80);
+  close(r.kbpsPerCall, 87.2);
+  assert.equal(formatRate(r.kbpsPerCall), '87,2 kbps');
+});
+
+test('G.729 20 ms su Ethernet = 31,2 kbps; 30 ms = 23,47 kbps', () => {
+  close(calcVoip({ codec: 'g729', ptime: 20 }).kbpsPerCall, 31.2);
+  close(calcVoip({ codec: 'g729', ptime: 30 }).kbpsPerCall, (88 * 8) / 30);
+});
+
+test('G.711 10/30 ms e G.722 = G.711', () => {
+  close(calcVoip({ codec: 'g711', ptime: 10 }).kbpsPerCall, 110.4);
+  close(calcVoip({ codec: 'g711', ptime: 30 }).kbpsPerCall, (298 * 8) / 30);
+  close(calcVoip({ codec: 'g722', ptime: 20 }).kbpsPerCall, 87.2);
+});
+
+test('802.1Q (+4 B) e preambolo + IFG (+20 B)', () => {
+  assert.equal(calcVoip({ dot1q: true }).wireBytes, 222);
+  close(calcVoip({ dot1q: true }).kbpsPerCall, 88.8);
+  assert.equal(calcVoip({ dot1q: true, preamble: true }).wireBytes, 242);
+  assert.equal(calcVoip({ ethernet: false, dot1q: true, preamble: true }).wireBytes, 200, 'senza Ethernet niente L2');
+});
+
+test('IPsec ESP tunnel AES-CBC/SHA1: padding a 16 B', () => {
+  const r = calcVoip({ ipsec: 'tunnel-cbc' });
+  // 200 + 2 trailer = 202 -> 208; 20 IP + 8 ESP + 16 IV + 208 + 12 ICV = 264
+  assert.equal(r.l3Bytes, 264);
+  assert.equal(r.wireBytes, 282);
+  close(r.kbpsPerCall, 112.8);
+});
+
+test('IPsec ESP tunnel AES-GCM e NAT-T', () => {
+  assert.equal(calcVoip({ ipsec: 'tunnel-gcm' }).l3Bytes, 256);
+  assert.equal(calcVoip({ ipsec: 'tunnel-gcm', natt: true }).l3Bytes, 264);
+  assert.equal(calcVoip({ natt: true }).l3Bytes, 200, 'NAT-T ignorato senza IPsec');
+});
+
+test('GRE e GRE + IPsec transport (stile DMVPN)', () => {
+  assert.equal(calcVoip({ gre: true }).l3Bytes, 224);
+  // GRE 224; transport protegge 204 + 2 = 206 -> 208 (blocco 4); 20 + 8 + 8 + 208 + 16 = 260
+  assert.equal(calcVoip({ gre: true, ipsec: 'transport-gcm' }).l3Bytes, 260);
+  // CBC: 206 -> 208 (blocco 16); 20 + 8 + 16 + 208 + 12 = 264
+  assert.equal(calcVoip({ gre: true, ipsec: 'transport-cbc' }).l3Bytes, 264);
+});
+
+test('Opus a bitrate scelto e N chiamate', () => {
+  const r = calcVoip({ codec: 'opus', bitrate: 24, ptime: 20, calls: 25 });
+  assert.equal(r.payload, 60);
+  close(r.kbpsPerCall, 47.2);
+  close(r.kbpsTotal, 1180);
+  assert.equal(formatRate(r.kbpsTotal), '1,18 Mbps');
+});
+
+test('input non validi', () => {
+  assert.equal(calcVoip({ codec: 'gsm' }).ok, false);
+  assert.equal(calcVoip({ ptime: 25 }).field, 'ptime');
+  assert.equal(calcVoip({ calls: 0 }).field, 'calls');
+  assert.equal(calcVoip({ calls: 2.5 }).field, 'calls');
+  assert.equal(calcVoip({ codec: 'opus', bitrate: 4 }).field, 'bitrate');
+  assert.equal(calcVoip({ ipsec: 'xyz' }).field, 'ipsec');
 });
 
 console.log(`\n${passed} superati, ${failed} falliti`);

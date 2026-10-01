@@ -34,6 +34,12 @@ export function fmtInt(n) {
   return intFormat.format(n);
 }
 
+const decFormats = new Map();
+export function fmtDec(n, digits = 1) {
+  if (!decFormats.has(digits)) decFormats.set(digits, new Intl.NumberFormat('it-IT', { maximumFractionDigits: digits }));
+  return decFormats.get(digits).format(n);
+}
+
 export function kvList(items, className = '') {
   const dl = h('dl', { class: `kv ${className}`.trim() });
   for (const item of items) {

@@ -22,6 +22,7 @@ const TOOLS = [
     id: 'banda', section: 'voce', title: 'Calcolatore banda',
     description: 'Banda per chiamata e per N chiamate con codec, packetization e overhead di rete.',
     keywords: 'voip codec g711 g722 g729 opus bandwidth ethernet rtp udp 802.1q ipsec gre',
+    load: () => import('./tools/voip-bw.js'),
   },
   {
     id: 'sip', section: 'voce', title: 'Parser SIP',
