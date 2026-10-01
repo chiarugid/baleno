@@ -387,6 +387,9 @@ export function parseSip(text) {
   if (to && !toTag) {
     if (msg.kind === 'response' && msg.status !== 100) {
       add('warn', 'header', `Risposta ${msg.status} con To senza tag: lo UAS deve aggiungerlo.`);
+    } else if (msg.kind === 'request' && msg.method === 'NOTIFY') {
+      // NOTIFY fuori dialogo (es. MWI senza SUBSCRIBE) è prassi diffusa, non un errore.
+      add('info', 'header', 'NOTIFY senza tag nel To: possibile NOTIFY unsolicited (MWI), inviato fuori da una sottoscrizione.');
     } else if (msg.kind === 'request' && IN_DIALOG.includes(msg.method)) {
       add('warn', 'header', `${msg.method} senza tag nel To: è una richiesta in-dialog e deve riportare il tag del dialogo.`);
     }

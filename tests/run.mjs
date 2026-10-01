@@ -437,11 +437,32 @@ test('To tag: non richiesto nelle richieste iniziali', () => {
 });
 
 test('To tag: richiesto nelle richieste in-dialog', () => {
-  for (const method of ['BYE', 'ACK', 'PRACK', 'UPDATE', 'INFO', 'NOTIFY']) {
+  for (const method of ['BYE', 'ACK', 'PRACK', 'UPDATE', 'INFO']) {
     hasIssue(sipMsg({ start: `${method} sip:a@192.0.2.9 SIP/2.0`, cseq: `2 ${method}` }), 'warn', new RegExp(`${method} senza tag nel To`));
     const ok = sipMsg({ start: `${method} sip:a@192.0.2.9 SIP/2.0`, cseq: `2 ${method}`, to: '<sip:a@example.com>;tag=99' });
     assert.ok(!issuesOf(ok).some((t) => /tag nel To/.test(t)), method);
   }
+});
+
+test('NOTIFY senza To tag: azzurro, possibile NOTIFY unsolicited (MWI)', () => {
+  const m = sipMsg({ start: 'NOTIFY sip:101@192.0.2.9 SIP/2.0', cseq: '1 NOTIFY' });
+  hasIssue(m, 'info', /NOTIFY unsolicited \(MWI\)/);
+  assert.ok(!issuesOf(m, 'warn').some((t) => /tag/.test(t)));
+  assert.ok(!issuesOf(m, 'err').some((t) => /tag/.test(t)));
+  const inDialog = sipMsg({ start: 'NOTIFY sip:101@192.0.2.9 SIP/2.0', cseq: '1 NOTIFY', to: '<sip:101@example.com>;tag=7' });
+  assert.ok(!issuesOf(inDialog).some((t) => /NOTIFY senza tag/.test(t)));
+});
+
+test('rport confrontato con la porta del sent-by; 5060/5061 solo se assente', () => {
+  const nat = (via) => sipMsg({ via }).nat.detected;
+  assert.equal(nat('SIP/2.0/UDP 10.1.1.5:5070;branch=z9hG4bK1;rport=5070'), false, 'porta esplicita uguale');
+  assert.equal(nat('SIP/2.0/UDP 10.1.1.5:5070;branch=z9hG4bK1;rport=5060'), true, '5060 ≠ porta esplicita 5070');
+  assert.equal(nat('SIP/2.0/TLS 10.1.1.5:5070;branch=z9hG4bK1;rport=5061'), true, '5061 ≠ porta esplicita 5070');
+  assert.equal(nat('SIP/2.0/UDP 10.1.1.5;branch=z9hG4bK1;rport=5060'), false, 'senza porta: default 5060');
+  assert.equal(nat('SIP/2.0/UDP 10.1.1.5;branch=z9hG4bK1;rport=5061'), true, 'senza porta UDP: 5061 ≠ 5060');
+  assert.equal(nat('SIP/2.0/TLS 10.1.1.5;branch=z9hG4bK1;rport=5060'), true, 'senza porta TLS: 5060 ≠ 5061');
+  assert.equal(nat('SIP/2.0/UDP [2001:db8::5]:5080;branch=z9hG4bK1;rport=5080'), false, 'IPv6 con porta');
+  assert.match(sipMsg({ via: 'SIP/2.0/UDP 10.1.1.5:5070;branch=z9hG4bK1;rport=40000' }).nat.evidence, /rport=40000 invece di 5070/);
 });
 
 test('To tag: risposte diverse da 100', () => {
@@ -710,6 +731,9 @@ test('indirizzi speciali: HSRP, VRRP, GLBP, multicast, protocolli L2', () => {
 });
 
 test('IPv6 link-local EUI-64', () => {
+  // dall'input in formato con i due punti, come lo scriverebbe un utente
+  assert.equal(eui64LinkLocal(parseMac('00:1A:2B:3C:4D:5E').hex), 'fe80::21a:2bff:fe3c:4d5e');
+  assert.equal(macInfo(parseMac('00:1A:2B:3C:4D:5E').hex).eui64, 'fe80::21a:2bff:fe3c:4d5e');
   assert.equal(eui64LinkLocal('00505612AB34'), 'fe80::250:56ff:fe12:ab34');
   assert.equal(eui64LinkLocal('00000C07AC0A'), 'fe80::200:cff:fe07:ac0a');
   assert.equal(eui64LinkLocal('525400123456'), 'fe80::5054:ff:fe12:3456');
