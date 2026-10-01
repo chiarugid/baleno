@@ -42,6 +42,10 @@ const STATIC_PT = {
   33: ['MP2T', 90000], 34: ['H263', 90000],
 };
 
+// Richieste sempre in-dialog: il To deve avere il tag. INVITE, CANCEL, OPTIONS e simili
+// possono essere iniziali, quindi il tag mancante lì non è un'anomalia.
+const IN_DIALOG = ['ACK', 'BYE', 'PRACK', 'UPDATE', 'INFO', 'NOTIFY'];
+
 const DIRECTIONS = ['sendrecv', 'sendonly', 'recvonly', 'inactive'];
 const DIRECTION_LABEL = { sendrecv: 'sendrecv (bidirezionale)', sendonly: 'sendonly (solo invio)', recvonly: 'recvonly (solo ricezione)', inactive: 'inactive (nessun flusso)' };
 
@@ -86,9 +90,38 @@ function outsideAngle(value) {
   return close >= 0 ? value.slice(close + 1) : value;
 }
 
+function splitHostPort(sentBy) {
+  const v6 = /^\[([^\]]+)\](?::(\d+))?$/.exec(sentBy);
+  if (v6) return { host: v6[1], port: v6[2] ? Number(v6[2]) : null };
+  const [host, port] = sentBy.split(':');
+  return { host, port: port ? Number(port) : null };
+}
+
+export function viaNat(via) {
+  const none = { detected: false };
+  if (!via) return none;
+  const m = /^SIP\/2\.0\/([A-Z]+)\s+([^;\s]+)/i.exec(via);
+  if (!m) return none;
+  const transport = m[1].toUpperCase();
+  const { host, port } = splitHostPort(m[2]);
+  const sentPort = port ?? (transport === 'TLS' ? 5061 : 5060);
+  const received = headerParam(via, 'received');
+  const rport = headerParam(via, 'rport');
+  const isIp = (a) => parseIPv4(a) != null || parseIPv6(a) != null;
+  const evidence = [];
+  if (received && isIp(received) && !nonPublicKind(received) && received !== host) evidence.push(`received=${received}`);
+  if (rport && /^\d+$/.test(rport) && Number(rport) !== sentPort) evidence.push(`rport=${rport} invece di ${sentPort}`);
+  return {
+    detected: evidence.length > 0,
+    evidence: evidence.join(', '),
+    host,
+    sentByKind: isIp(host) ? nonPublicKind(host) : null,
+  };
+}
+
 // ---------------------------------------------------------------- SDP
 
-function parseSdp(lines, issues) {
+function parseSdp(lines, issues, nat = { detected: false }) {
   const sdp = { version: null, origin: null, name: null, timing: null, connection: null, direction: null, attributes: [], media: [] };
   let cur = null;
   const add = (level, message) => issues.push({ level, area: 'sdp', message });
@@ -167,6 +200,8 @@ function parseSdp(lines, issues) {
     const label = `m=${media.type} #${i + 1}`;
     media.effectiveConnection = media.connection ?? sdp.connection;
     media.effectiveDirection = media.direction ?? sdp.direction ?? 'sendrecv';
+    media.rtcpMux = [...media.attributes, ...sdp.attributes].some((a) => a.name === 'rtcp-mux');
+    media.effectiveFingerprint = media.fingerprint ?? sdp.fingerprint;
     media.codecs = media.formats.map((pt) => {
       const map = media.rtpmap[pt];
       const fixed = STATIC_PT[pt];
@@ -186,11 +221,13 @@ function parseSdp(lines, issues) {
       const address = media.effectiveConnection.address;
       const kind = nonPublicKind(address);
       if (kind?.startsWith('Non specificato')) add('info', `${label}: c=${address}, convenzione storica per la messa in attesa (hold).`);
-      else if (kind) add('warn', `${label}: indirizzo media ${address} non pubblico (${lc(kind)}). Attraverso un NAT l'audio può risultare assente o unidirezionale.`);
+      else if (kind) {
+        add(nat.detected ? 'warn' : 'info', `${label}: indirizzo media ${address} non pubblico (${lc(kind)}). Attraverso un NAT l'audio può risultare assente o unidirezionale.${nat.detected ? ` NAT rilevato dal Via (${nat.evidence}).` : ''}`);
+      }
     }
     if (media.port === 0) add('info', `${label}: porta 0, flusso disattivato o rifiutato.`);
     else if (!Number.isInteger(media.port) || media.port < 0 || media.port > 65535) add('err', `${label}: porta non valida.`);
-    else if (isRtp && media.port % 2 === 1) add('info', `${label}: porta RTP dispari (${media.port}); per convenzione RTP usa porte pari.`);
+    else if (isRtp && media.port % 2 === 1 && !media.rtcpMux) add('info', `${label}: porta RTP dispari (${media.port}); senza rtcp-mux, per convenzione RTP usa porte pari.`);
 
     if (isRtp) {
       for (const codec of media.codecs) {
@@ -202,8 +239,8 @@ function parseSdp(lines, issues) {
         if (!media.formats.includes(pt)) add('warn', `${label}: a=rtpmap per il payload ${pt}, che non compare nella riga m=.`);
       }
       const secure = /SAVP/.test(media.proto);
-      const fingerprint = media.fingerprint ?? sdp.fingerprint;
-      if (secure && !media.crypto.length && !fingerprint) add('warn', `${label}: profilo ${media.proto} (SRTP) senza a=crypto né a=fingerprint: chiavi non negoziate.`);
+      // Chiavi SRTP: SDES (a=crypto) oppure DTLS-SRTP (a=fingerprint, di sessione o di media).
+      if (secure && !media.crypto.length && !media.effectiveFingerprint) add('warn', `${label}: profilo ${media.proto} (SRTP) senza a=crypto né a=fingerprint: chiavi non negoziate.`);
       if (!secure && media.crypto.length) add('info', `${label}: a=crypto presente ma profilo ${media.proto} non sicuro; la cifratura verrà ignorata.`);
     }
     if (media.effectiveDirection !== 'sendrecv' && media.port !== 0) {
@@ -326,26 +363,33 @@ export function parseSip(text) {
     if (!/^SIP\/2\.0\/[A-Z]+\s+\S+/i.test(via)) add('err', 'header', `Via #${n + 1} non valido: "${via.slice(0, 60)}".`);
     if (!branch) add('warn', 'header', `Via #${n + 1} senza parametro branch.`);
     else if (!branch.startsWith('z9hG4bK')) add('warn', 'header', `Via #${n + 1}: branch senza il prefisso z9hG4bK (RFC 3261), transazioni RFC 2543.`);
-    if (n === 0) {
-      for (const ip of ipv4Literals(via.split(';')[0])) {
-        const kind = nonPublicKind(ip);
-        if (kind && !headerParam(via, 'received')) add('info', 'header', `Via in cima con indirizzo ${ip} (${lc(kind)}): il mittente è dietro NAT o in rete interna.`);
-      }
-    }
   });
+
+  // NAT: il Via in cima riporta received= pubblico diverso dal sent-by, o rport= diverso dalla porta.
+  msg.nat = viaNat(get('Via'));
+  const natNote = msg.nat.detected ? ` NAT rilevato dal Via (${msg.nat.evidence}).` : '';
+  const privLevel = msg.nat.detected ? 'warn' : 'info';
+  if (msg.nat.sentByKind) {
+    add('info', 'header', `Via in cima con indirizzo ${msg.nat.host} (${lc(msg.nat.sentByKind)}): il mittente è in rete interna.${natNote}`);
+  }
 
   for (const contact of all('Contact')) {
     for (const ip of ipv4Literals(contact)) {
       const kind = nonPublicKind(ip);
-      if (kind) add('warn', 'header', `Contact con indirizzo ${ip} non pubblico (${lc(kind)}): richieste in-dialog e BYE potrebbero non arrivare attraverso un NAT.`);
+      if (kind) add(privLevel, 'header', `Contact con indirizzo ${ip} non pubblico (${lc(kind)}): attraverso un NAT le richieste in-dialog e il BYE potrebbero non arrivare.${natNote}`);
     }
   }
 
   const from = get('From');
   if (from && msg.kind === 'request' && !headerParam(outsideAngle(from), 'tag')) add('warn', 'header', 'From senza parametro tag.');
   const to = get('To');
-  if (to && msg.kind === 'response' && msg.status > 100 && !headerParam(outsideAngle(to), 'tag')) {
-    add('warn', 'header', `Risposta ${msg.status} con To senza tag: lo UAS deve aggiungerlo.`);
+  const toTag = to ? headerParam(outsideAngle(to), 'tag') : null;
+  if (to && !toTag) {
+    if (msg.kind === 'response' && msg.status !== 100) {
+      add('warn', 'header', `Risposta ${msg.status} con To senza tag: lo UAS deve aggiungerlo.`);
+    } else if (msg.kind === 'request' && IN_DIALOG.includes(msg.method)) {
+      add('warn', 'header', `${msg.method} senza tag nel To: è una richiesta in-dialog e deve riportare il tag del dialogo.`);
+    }
   }
 
   // Corpo e Content-Length.
@@ -372,7 +416,7 @@ export function parseSip(text) {
   const looksSdp = bodyLines[0]?.trim().startsWith('v=');
   if (bodyLines.length && (/application\/sdp/i.test(contentType ?? '') || looksSdp)) {
     if (looksSdp && contentType && !/application\/sdp/i.test(contentType)) add('warn', 'body', `Il corpo sembra SDP ma Content-Type è "${contentType}".`);
-    msg.sdp = parseSdp(bodyLines, issues);
+    msg.sdp = parseSdp(bodyLines, issues, msg.nat);
   }
   if (msg.kind === 'request' && msg.method === 'INVITE' && !bodyLines.length) {
     add('info', 'body', 'INVITE senza SDP: offerta tardiva (delayed offer), l\'SDP arriverà nel 200 OK.');
@@ -527,7 +571,7 @@ function issuesView(issues) {
     badge(LEVEL[it.level][0], LEVEL[it.level][1]), ' ', it.message)))];
 }
 
-function sdpView(sdp) {
+function sdpView(sdp, nat) {
   const nodes = [kvList([
     sdp.origin ? { label: 'Origine (o=)', value: `${sdp.origin.username} · ${sdp.origin.address ?? '—'}` } : null,
     { label: 'Sessione (s=)', value: sdp.name ?? '—' },
@@ -541,10 +585,10 @@ function sdpView(sdp) {
     nodes.push(
       h('h3', { class: 'section-title' }, `Flusso ${i + 1} · ${media.type}`),
       kvList([
-        { label: 'Indirizzo media', value: [conn ? conn.address : '—', kind ? h('span', { class: 'sub' }, badge(kind.startsWith('Non specificato') ? 'hold' : 'non pubblico', kind.startsWith('Non specificato') ? 'info' : 'warn')) : null], hl: true },
+        { label: 'Indirizzo media', value: [conn ? conn.address : '—', kind ? h('span', { class: 'sub' }, badge(kind.startsWith('Non specificato') ? 'hold' : 'non pubblico', kind.startsWith('Non specificato') || !nat.detected ? 'info' : 'warn')) : null], hl: true },
         { label: 'Porta RTP', value: media.port === 0 ? '0 (disattivato)' : String(media.port), hl: true },
         media.rtcp ? { label: 'RTCP', value: media.rtcp } : null,
-        { label: 'Protocollo', value: [media.proto, /SAVP/.test(media.proto) ? h('span', { class: 'sub' }, badge(media.crypto.length ? 'SRTP SDES' : (media.fingerprint ?? sdp.fingerprint) ? 'SRTP DTLS' : 'SRTP senza chiavi', media.crypto.length || media.fingerprint || sdp.fingerprint ? 'ok' : 'warn')) : null] },
+        { label: 'Protocollo', value: [media.proto, /SAVP/.test(media.proto) ? h('span', { class: 'sub' }, badge(media.crypto.length ? 'SRTP SDES' : media.effectiveFingerprint ? 'SRTP DTLS' : 'SRTP senza chiavi', media.crypto.length || media.effectiveFingerprint ? 'ok' : 'warn')) : null] },
         { label: 'Direzione', value: DIRECTION_LABEL[media.effectiveDirection] ?? media.effectiveDirection },
         media.ptime ? { label: 'ptime', value: `${media.ptime} ms${media.maxptime ? ` (max ${media.maxptime} ms)` : ''}` } : null,
       ], 'kv--compact'),
@@ -634,7 +678,7 @@ export function render(container, params, ctx) {
     sdpDl.el.hidden = !msg.sdp;
     if (msg.sdp) {
       sdpDl.setSubtitle(`${fmtInt(msg.sdp.media.length)} ${msg.sdp.media.length === 1 ? 'flusso' : 'flussi'}`);
-      sdpDl.body.replaceChildren(...sdpView(msg.sdp));
+      sdpDl.body.replaceChildren(...sdpView(msg.sdp, msg.nat));
     }
   }
 

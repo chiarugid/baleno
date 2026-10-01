@@ -352,8 +352,8 @@ test('esempio con anomalie: tutte rilevate', () => {
   hasIssue(m, 'err', /dinamico 101 senza a=rtpmap/);
   hasIssue(m, 'warn', /branch senza il prefisso z9hG4bK/);
   hasIssue(m, 'warn', /From senza parametro tag/);
-  hasIssue(m, 'warn', /indirizzo media 192\.168\.1\.50 non pubblico/);
-  hasIssue(m, 'warn', /Contact con indirizzo 192\.168\.1\.50/);
+  hasIssue(m, 'info', /indirizzo media 192\.168\.1\.50 non pubblico/);
+  hasIssue(m, 'info', /Contact con indirizzo 192\.168\.1\.50/);
   hasIssue(m, 'warn', /SAVP.*senza a=crypto/);
   hasIssue(m, 'info', /sendonly/);
   hasIssue(m, 'info', /porta RTP dispari/);
@@ -407,11 +407,101 @@ test('risposta senza To tag, codice non valido, testo non SIP', () => {
 test('SDP: hold con 0.0.0.0, IPv6 ULA, righe obbligatorie mancanti', () => {
   const sdpMsg = (body) => parseSip(`INVITE sip:a@example.com SIP/2.0\nVia: SIP/2.0/UDP 192.0.2.1;branch=z9hG4bK1\nMax-Forwards: 70\nFrom: <sip:b@example.com>;tag=1\nTo: <sip:a@example.com>\nCall-ID: x\nCSeq: 1 INVITE\nContact: <sip:b@192.0.2.1>\nContent-Type: application/sdp\n\n${body}`);
   hasIssue(sdpMsg('v=0\no=- 1 1 IN IP4 192.0.2.1\ns=-\nc=IN IP4 0.0.0.0\nt=0 0\nm=audio 4000 RTP/AVP 0'), 'info', /hold/);
-  hasIssue(sdpMsg('v=0\no=- 1 1 IN IP6 2001:db8::1\ns=-\nc=IN IP6 fd00::10\nt=0 0\nm=audio 4000 RTP/AVP 0'), 'warn', /fd00::10 non pubblico \(unique local/);
+  hasIssue(sdpMsg('v=0\no=- 1 1 IN IP6 2001:db8::1\ns=-\nc=IN IP6 fd00::10\nt=0 0\nm=audio 4000 RTP/AVP 0'), 'info', /fd00::10 non pubblico \(unique local/);
   const missing = sdpMsg('v=0\nm=audio 4000 RTP/AVP 8');
   hasIssue(missing, 'err', /manca la riga obbligatoria o=/);
   hasIssue(missing, 'err', /nessuna riga c=/);
   hasIssue(missing, 'warn', /senza Content-Length/);
+});
+
+// Messaggio minimo e valido da variare nei test seguenti.
+const sipMsg = ({ start = 'INVITE sip:a@example.com SIP/2.0', via = 'SIP/2.0/UDP 192.0.2.1:5060;branch=z9hG4bK1', to = '<sip:a@example.com>', cseq = '1 INVITE', contact = '<sip:b@192.0.2.1>', maxForwards = '70', body = '' } = {}) => parseSip([
+  start, `Via: ${via}`, maxForwards == null ? null : `Max-Forwards: ${maxForwards}`, 'From: <sip:b@example.com>;tag=1', `To: ${to}`, 'Call-ID: x@example.com', `CSeq: ${cseq}`,
+  contact == null ? null : `Contact: ${contact}`,
+  body ? 'Content-Type: application/sdp' : null, `Content-Length: ${body ? body.split('\n').reduce((n, l) => n + l.length + 2, 0) : 0}`,
+  '', body,
+].filter((l) => l != null).join('\n'));
+const sdpBody = (extra, { c = '192.0.2.1', port = 4000, proto = 'RTP/AVP' } = {}) => ['v=0', 'o=- 1 1 IN IP4 192.0.2.1', 's=-', `c=IN IP4 ${c}`, 't=0 0', `m=audio ${port} ${proto} 0`, ...extra].join('\n');
+
+test('To tag: non richiesto nelle richieste iniziali', () => {
+  for (const method of ['INVITE', 'OPTIONS', 'SUBSCRIBE', 'REGISTER', 'MESSAGE']) {
+    const m = sipMsg({ start: `${method} sip:a@example.com SIP/2.0`, cseq: `1 ${method}` });
+    assert.ok(!issuesOf(m).some((t) => /To senza tag|tag nel To/.test(t)), method);
+  }
+  // CANCEL riprende il To dell'INVITE originale, senza tag
+  assert.ok(!issuesOf(sipMsg({ start: 'CANCEL sip:a@example.com SIP/2.0', cseq: '1 CANCEL' })).some((t) => /tag nel To/.test(t)));
+});
+
+test('To tag: richiesto nelle richieste in-dialog', () => {
+  for (const method of ['BYE', 'ACK', 'PRACK', 'UPDATE', 'INFO', 'NOTIFY']) {
+    hasIssue(sipMsg({ start: `${method} sip:a@192.0.2.9 SIP/2.0`, cseq: `2 ${method}` }), 'warn', new RegExp(`${method} senza tag nel To`));
+    const ok = sipMsg({ start: `${method} sip:a@192.0.2.9 SIP/2.0`, cseq: `2 ${method}`, to: '<sip:a@example.com>;tag=99' });
+    assert.ok(!issuesOf(ok).some((t) => /tag nel To/.test(t)), method);
+  }
+});
+
+test('To tag: risposte diverse da 100', () => {
+  const resp = (code) => parseSip(`SIP/2.0 ${code}\nVia: SIP/2.0/UDP 192.0.2.1;branch=z9hG4bK1\nFrom: <sip:b@x>;tag=1\nTo: <sip:a@x>\nCall-ID: 1\nCSeq: 1 INVITE\nContent-Length: 0`);
+  assert.ok(!issuesOf(resp('100 Trying')).some((t) => /To senza tag/.test(t)), '100 non segnala');
+  for (const code of ['180 Ringing', '183 Session Progress', '200 OK', '404 Not Found', '503 Service Unavailable']) {
+    hasIssue(resp(code), 'warn', /con To senza tag/);
+  }
+});
+
+test('SAVP/SAVPF validi con a=crypto o con a=fingerprint (DTLS-SRTP)', () => {
+  const noKeys = /senza a=crypto né a=fingerprint/;
+  const crypto = 'a=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:WVNfX19zZW1jdGwgKCkgewkyMjA7fQp9CnVubGVz';
+  const fp = 'a=fingerprint:sha-256 4A:AD:B9:B1:3F:82:18:3B:54:02:12:DF:3E:5D:49:6B:19:E5:7C:AB:4A:AD:B9:B1:3F:82:18:3B:54:02:12:DF';
+  for (const proto of ['RTP/SAVP', 'RTP/SAVPF', 'UDP/TLS/RTP/SAVPF']) {
+    assert.ok(!issuesOf(sipMsg({ body: sdpBody([crypto], { proto }) })).some((t) => noKeys.test(t)), `${proto} + crypto`);
+    assert.ok(!issuesOf(sipMsg({ body: sdpBody([fp, 'a=setup:actpass'], { proto }) })).some((t) => noKeys.test(t)), `${proto} + fingerprint di media`);
+    hasIssue(sipMsg({ body: sdpBody([], { proto }) }), 'warn', noKeys);
+  }
+  // fingerprint a livello di sessione (prima di m=)
+  const sessionFp = ['v=0', 'o=- 1 1 IN IP4 192.0.2.1', 's=-', 'c=IN IP4 192.0.2.1', 't=0 0', fp, 'm=audio 4000 UDP/TLS/RTP/SAVPF 0'].join('\n');
+  const m = sipMsg({ body: sessionFp });
+  assert.ok(!issuesOf(m).some((t) => noKeys.test(t)));
+  assert.ok(m.sdp.media[0].effectiveFingerprint);
+});
+
+test('IP privati: azzurro senza NAT, arancio con received/rport nel Via', () => {
+  const body = sdpBody([], { c: '10.1.1.5' });
+  const plain = sipMsg({ via: 'SIP/2.0/UDP 10.1.1.5:5060;branch=z9hG4bK1', contact: '<sip:b@10.1.1.5>', body });
+  hasIssue(plain, 'info', /indirizzo media 10\.1\.1\.5 non pubblico/);
+  hasIssue(plain, 'info', /Contact con indirizzo 10\.1\.1\.5/);
+  assert.deepEqual(issuesOf(plain, 'warn'), []);
+  assert.equal(plain.nat.detected, false);
+
+  const natted = sipMsg({ via: 'SIP/2.0/UDP 10.1.1.5:5060;branch=z9hG4bK1;received=203.0.113.7;rport=41234', contact: '<sip:b@10.1.1.5>', body });
+  assert.equal(natted.nat.detected, true);
+  hasIssue(natted, 'warn', /indirizzo media 10\.1\.1\.5 non pubblico.*received=203\.0\.113\.7/);
+  hasIssue(natted, 'warn', /Contact con indirizzo 10\.1\.1\.5.*NAT rilevato/);
+
+  // solo rport diverso dalla porta del sent-by
+  assert.equal(sipMsg({ via: 'SIP/2.0/UDP 10.1.1.5:5060;branch=z9hG4bK1;rport=41234', body }).nat.detected, true);
+  // received uguale al sent-by, rport uguale alla porta, received privato: nessun NAT
+  assert.equal(sipMsg({ via: 'SIP/2.0/UDP 192.0.2.1:5060;branch=z9hG4bK1;received=192.0.2.1;rport=5060' }).nat.detected, false);
+  assert.equal(sipMsg({ via: 'SIP/2.0/UDP 10.1.1.5:5060;branch=z9hG4bK1;received=10.9.9.9' }).nat.detected, false);
+  // rport senza valore (richiesta del client) non indica NAT
+  assert.equal(sipMsg({ via: 'SIP/2.0/UDP 10.1.1.5:5060;branch=z9hG4bK1;rport' }).nat.detected, false);
+  // porta di default 5061 per TLS
+  assert.equal(sipMsg({ via: 'SIP/2.0/TLS 10.1.1.5;branch=z9hG4bK1;rport=5061' }).nat.detected, false);
+});
+
+test('porte RTP dispari: azzurro, nessuna segnalazione con rtcp-mux', () => {
+  hasIssue(sipMsg({ body: sdpBody([], { port: 4001 }) }), 'info', /porta RTP dispari \(4001\)/);
+  assert.ok(!issuesOf(sipMsg({ body: sdpBody(['a=rtcp-mux'], { port: 4001 }) })).some((t) => /dispari/.test(t)));
+  assert.ok(!issuesOf(sipMsg({ body: sdpBody([], { port: 4000 }) })).some((t) => /dispari/.test(t)));
+  assert.ok(!issuesOf(sipMsg({ body: sdpBody([], { port: 4001 }) }), 'warn').some((t) => /dispari/.test(t)));
+});
+
+test('Max-Forwards obbligatorio nelle richieste, non nelle risposte', () => {
+  for (const method of ['INVITE', 'BYE', 'OPTIONS', 'REGISTER']) {
+    hasIssue(sipMsg({ start: `${method} sip:a@example.com SIP/2.0`, cseq: `1 ${method}`, maxForwards: null }), 'err', /Manca l'header obbligatorio Max-Forwards/);
+  }
+  assert.deepEqual(issuesOf(sipMsg(), 'err'), []);
+  const resp = parseSip('SIP/2.0 200 OK\nVia: SIP/2.0/UDP 192.0.2.1;branch=z9hG4bK1\nFrom: <sip:b@x>;tag=1\nTo: <sip:a@x>;tag=2\nCall-ID: 1\nCSeq: 1 OPTIONS\nContent-Length: 0');
+  assert.ok(!issuesOf(resp).some((t) => /Max-Forwards/.test(t)));
 });
 
 console.log(`\n${passed} superati, ${failed} falliti`);
