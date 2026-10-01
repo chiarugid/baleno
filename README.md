@@ -7,7 +7,7 @@ Strumenti di rete e VoIP che girano interamente nel browser, pubblicati su [www.
 - **Parser SIP**: start line, header (anche compatti), SDP con codec e media, anomalie comuni
 - **Codici di risposta SIP**: tutti i codici 1xx–6xx con significato, RFC e mappatura Q.850 (RFC 3398)
 - **Tabella DSCP/CoS/ToS** con PHB, classe di servizio e uso tipico, più convertitore DSCP ↔ ToS ↔ IP Precedence
-- **Convertitore MAC** con lookup vendor OUI locale *(in sviluppo)*
+- **Convertitore MAC**: formati Cisco, due punti, trattini, senza separatori; produttore da un sottoinsieme OUI locale; indirizzi speciali (HSRP, VRRP, multicast…); conversione multipla
 
 HTML, CSS e JavaScript vanilla: nessun build step, nessun backend, nessuna chiamata esterna, nessun tracking.
 
@@ -29,6 +29,14 @@ I calcoli si verificano con Node 18 o successivo, senza dipendenze:
 node tests/run.mjs
 ```
 
+## Dati OUI
+
+`data/oui.js` contiene un sottoinsieme del registro IEEE MA-L (circa 10.000 prefissi dei produttori più comuni in reti aziendali e VoIP). Per aggiornarlo scarica `https://standards-oui.ieee.org/oui/oui.csv` ed esegui:
+
+```sh
+node scripts/build-oui.mjs oui.csv
+```
+
 ## Struttura
 
 ```
@@ -40,4 +48,5 @@ js/tools/      un modulo per strumento: funzioni di calcolo + interfaccia
 data/          tabelle statiche
 fonts/         Inter (SIL OFL 1.1)
 tests/         test dei calcoli
+scripts/       generazione dei dati (OUI)
 ```

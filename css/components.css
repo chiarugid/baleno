@@ -473,6 +473,16 @@ fieldset.field--plain legend { padding: 0; margin-bottom: 4px; }
 .segmented--auto label { flex: none; }
 .segmented--auto span { padding: 0 12px; }
 
+/* ---------- Convertitore MAC ---------- */
+
+.kpi__value { overflow-wrap: anywhere; }
+.bulk-grid { display: grid; gap: 0 16px; }
+@media (min-width: 900px) {
+  .bulk-grid { grid-template-columns: minmax(0, 1fr) 300px; }
+}
+.table--formats td:first-child { width: 40%; }
+.table--formats td:last-child { width: 1%; padding: 2px 6px; }
+
 /* ---------- Parser SIP ---------- */
 
 @media (min-width: 900px) {

@@ -45,7 +45,8 @@ const TOOLS = [
   {
     id: 'mac', section: 'l2', title: 'Convertitore MAC',
     description: 'Formati Cisco, due punti, trattini, senza separatori e lookup vendor OUI.',
-    keywords: 'mac oui vendor ethernet indirizzo hardware produttore',
+    keywords: 'mac oui vendor ethernet indirizzo hardware produttore eui-64 hsrp vrrp multicast',
+    load: () => import('./tools/mac.js'),
   },
 ];
 

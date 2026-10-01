@@ -7,6 +7,7 @@ import { parseSip, EXAMPLES as SIP_EXAMPLES } from '../js/tools/sip-parser.js';
 import { findCode, filterCodes, q850For, reasonHeader, codeClass } from '../js/tools/sip-codes.js';
 import { SIP_CODES, Q850, SIP_TO_Q850, Q850_TO_SIP } from '../data/sip-codes.js';
 import { dscpInfo, parseValue, findPoint, TABLE_ROWS } from '../js/tools/dscp.js';
+import { parseMac, formatMac, lookupVendor, macInfo, specialAddress, eui64LinkLocal, extractMacs, OUI_COUNT } from '../js/tools/mac.js';
 
 let passed = 0;
 let failed = 0;
@@ -639,6 +640,91 @@ test('valori non validi o non standard', () => {
   assert.equal(parseValue('').ok, false);
   assert.equal(parseValue('2e').ok, false);
   assert.equal(dscpInfo(45).name, null);
+});
+
+console.log('MAC');
+
+test('parsing di tutti i formati', () => {
+  for (const text of ['0050.5612.ab34', '00:50:56:12:AB:34', '00-50-56-12-ab-34', '00505612ab34', ' 00 50 56 12 ab 34 ']) {
+    assert.deepEqual(parseMac(text), { ok: true, hex: '00505612AB34', ouiOnly: false }, text);
+  }
+  assert.deepEqual(parseMac('00:50:56'), { ok: true, hex: '005056', ouiOnly: true });
+  assert.equal(parseMac('0050.5612.ab3').ok, false);
+  assert.equal(parseMac('0050.5612.ab3g').ok, false);
+  assert.equal(parseMac('').ok, false);
+});
+
+test('formati Cisco, due punti, trattini, senza separatori, maiuscolo/minuscolo', () => {
+  const hex = '00505612AB34';
+  assert.equal(formatMac(hex, 'cisco', false), '0050.5612.ab34');
+  assert.equal(formatMac(hex, 'cisco', true), '0050.5612.AB34');
+  assert.equal(formatMac(hex, 'colon', false), '00:50:56:12:ab:34');
+  assert.equal(formatMac(hex, 'dash', true), '00-50-56-12-AB-34');
+  assert.equal(formatMac(hex, 'plain', false), '00505612ab34');
+});
+
+test('lookup produttore dal sottoinsieme OUI', () => {
+  assert.ok(OUI_COUNT > 5000);
+  assert.equal(lookupVendor('00000C000000'), 'Cisco');
+  assert.equal(lookupVendor('005056000000'), 'VMware');
+  assert.equal(lookupVendor('00155D000000'), 'Microsoft');
+  assert.equal(lookupVendor('080027000000'), 'VirtualBox');
+  assert.equal(lookupVendor('B827EB000000'), 'Raspberry Pi');
+  assert.equal(lookupVendor('0004F2000000'), 'Polycom / Poly');
+  assert.equal(lookupVendor('805EC0000000'), 'Yealink');
+  assert.equal(lookupVendor('000B82000000'), 'Grandstream');
+  assert.equal(lookupVendor('000413000000'), 'Snom');
+  assert.equal(lookupVendor('001A1E000000'), 'HPE / Aruba');
+  assert.equal(lookupVendor('123456000000'), null);
+});
+
+test('bit I/G e U/L, indirizzi locali senza produttore', () => {
+  const uni = macInfo('00505612AB34');
+  assert.equal(uni.multicast, false);
+  assert.equal(uni.local, false);
+  const rnd = macInfo('DAA119000001');
+  assert.equal(rnd.local, true);
+  assert.equal(rnd.randomized, true);
+  assert.equal(rnd.vendor, null);
+  const bc = macInfo('FFFFFFFFFFFF');
+  assert.equal(bc.broadcast, true);
+  assert.equal(bc.multicast, true);
+  assert.equal(bc.special, 'Broadcast');
+});
+
+test('indirizzi speciali: HSRP, VRRP, GLBP, multicast, protocolli L2', () => {
+  assert.equal(specialAddress('00000C07AC0A'), 'HSRP versione 1, gruppo 10');
+  assert.equal(specialAddress('00000C9FF123'), 'HSRP versione 2, gruppo 291');
+  assert.equal(specialAddress('00005E000105'), 'VRRP IPv4, gruppo 5');
+  assert.equal(specialAddress('00005E000201'), 'VRRP IPv6, gruppo 1');
+  assert.equal(specialAddress('0007B4000102'), 'GLBP, gruppo 1, forwarder 2');
+  assert.match(specialAddress('01005E0000FB'), /224\.0\.0\.251/);
+  assert.match(specialAddress('01005E7F0001'), /224\.127\.0\.1/);
+  assert.equal(specialAddress('01005E800000'), null, 'oltre i 23 bit non è multicast IPv4');
+  assert.match(specialAddress('333300000001'), /Multicast IPv6/);
+  assert.match(specialAddress('0180C200000E'), /LLDP/);
+  assert.match(specialAddress('0180C2000000'), /Spanning Tree/);
+  assert.match(specialAddress('01000CCCCCCC'), /CDP/);
+  assert.match(specialAddress('525400123456'), /QEMU/);
+  assert.equal(specialAddress('00505612AB34'), null);
+});
+
+test('IPv6 link-local EUI-64', () => {
+  assert.equal(eui64LinkLocal('00505612AB34'), 'fe80::250:56ff:fe12:ab34');
+  assert.equal(eui64LinkLocal('00000C07AC0A'), 'fe80::200:cff:fe07:ac0a');
+  assert.equal(eui64LinkLocal('525400123456'), 'fe80::5054:ff:fe12:3456');
+  assert.equal(macInfo('01005E0000FB').eui64, null, 'niente EUI-64 per multicast');
+});
+
+test('estrazione da testo libero (show mac address-table)', () => {
+  const text = [
+    'Vlan    Mac Address       Type        Ports',
+    '  10    0050.5612.ab34    DYNAMIC     Gi1/0/1',
+    '  20    00:0b:82:aa:bb:cc DYNAMIC     Gi1/0/2',
+    '  30    80-5E-C0-12-34-56 STATIC      Gi1/0/3',
+    'serial 1234567890123 e hash 00505612ab34f non sono MAC',
+  ].join('\n');
+  assert.deepEqual(extractMacs(text).map((m) => m.hex), ['00505612AB34', '000B82AABBCC', '805EC0123456']);
 });
 
 console.log(`\n${passed} superati, ${failed} falliti`);
