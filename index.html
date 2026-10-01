@@ -4,19 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>rebluc · Strumenti di rete e VoIP</title>
-  <meta name="description" content="Strumenti di rete e VoIP che girano interamente nel browser: calcolatore subnet, banda VoIP, parser SIP, tabella DSCP, convertitore MAC.">
+  <meta name="description" content="Strumenti di rete e VoIP che girano interamente nel browser.">
   <meta name="color-scheme" content="light dark">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="preload" href="fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin>
   <script>
-    // Applica tema e stato della sidebar prima del primo disegno.
+    // Applica tema, stato della sidebar e lingua prima del primo disegno.
     (function () {
       var root = document.documentElement;
-      var theme = null, sidebar = null;
+      var theme = null, sidebar = null, lang = null;
       try {
         theme = localStorage.getItem('rebluc-theme');
         sidebar = localStorage.getItem('rebluc-sidebar');
+        lang = localStorage.getItem('rebluc.lang');
       } catch (e) {}
+      var urlLang = (/[?&]lang=(it|en)\b/.exec(location.hash) || [])[1];
+      root.lang = urlLang || (lang === 'en' || lang === 'it' ? lang : 'it');
       if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
       var wide = window.innerWidth >= 768;
       if (wide && (sidebar === 'collapsed' || (!sidebar && window.innerWidth < 1100))) {
@@ -30,14 +33,14 @@
   <script type="module" src="js/app.js"></script>
 </head>
 <body>
-  <a class="skip-link" href="#main">Vai al contenuto</a>
+  <a class="skip-link" href="#main" data-i18n="app.skip">Vai al contenuto</a>
 
   <header class="topbar">
     <div class="topbar__left">
-      <button class="icon-btn" id="nav-toggle" type="button" aria-controls="sidebar" aria-expanded="true" aria-label="Menu">
+      <button class="icon-btn" id="nav-toggle" type="button" aria-controls="sidebar" aria-expanded="true" aria-label="Menu" data-i18n-attr="aria-label:app.menu">
         <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg></span>
       </button>
-      <a class="brand" href="#/" aria-label="rebluc, vai alla Dashboard">
+      <a class="brand" href="#/" aria-label="rebluc, vai alla Dashboard" data-i18n-attr="aria-label:app.brand">
         <svg class="brand__mark" viewBox="0 0 32 32" aria-hidden="true">
           <rect width="32" height="32" rx="6" fill="#1d2a3a"/>
           <rect x="7" y="18" width="4" height="7" rx="1" fill="#049fd9"/>
@@ -51,59 +54,64 @@
     <div class="topbar__search" role="search">
       <span class="search-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>
       <input id="tool-search" type="search" placeholder="Cerca strumento…" autocomplete="off" spellcheck="false"
-             role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="search-results" aria-label="Cerca strumento">
+             role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="search-results" aria-label="Cerca strumento"
+             data-i18n-attr="placeholder:app.searchPlaceholder;aria-label:app.search">
       <kbd aria-hidden="true">/</kbd>
-      <ul id="search-results" class="search-results" role="listbox" aria-label="Risultati" hidden></ul>
+      <ul id="search-results" class="search-results" role="listbox" aria-label="Risultati" data-i18n-attr="aria-label:app.searchResults" hidden></ul>
     </div>
 
     <div class="topbar__right">
-      <button class="icon-btn search-toggle" id="search-toggle" type="button" aria-label="Cerca strumento" title="Cerca strumento">
+      <button class="icon-btn search-toggle" id="search-toggle" type="button" aria-label="Cerca strumento" title="Cerca strumento" data-i18n-attr="aria-label:app.search;title:app.search">
         <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>
       </button>
+      <div class="lang-switch" role="group" aria-label="Lingua" data-i18n-attr="aria-label:app.langGroup">
+        <button type="button" data-lang="it" aria-pressed="true" aria-label="Lingua: italiano" title="Lingua: italiano" data-i18n-attr="aria-label:app.langIt;title:app.langIt">IT</button>
+        <button type="button" data-lang="en" aria-pressed="false" aria-label="Lingua: English" title="Lingua: English" data-i18n-attr="aria-label:app.langEn;title:app.langEn">EN</button>
+      </div>
       <button class="icon-btn" id="theme-toggle" type="button" aria-label="Cambia tema"></button>
-      <button class="icon-btn" id="info-btn" type="button" aria-label="Informazioni" title="Informazioni">
+      <button class="icon-btn" id="info-btn" type="button" aria-label="Informazioni" title="Informazioni" data-i18n-attr="aria-label:app.info;title:app.info">
         <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 16.5V11M12 7.5h.01"/></svg></span>
       </button>
     </div>
   </header>
 
-  <nav class="sidebar" id="sidebar" aria-label="Navigazione principale">
+  <nav class="sidebar" id="sidebar" aria-label="Navigazione principale" data-i18n-attr="aria-label:app.navLabel">
     <ul class="nav" id="nav"></ul>
     <div class="sidebar__foot">
-      <span>Elaborazione locale · nessun tracking</span>
+      <span data-i18n="app.footLocal">Elaborazione locale · nessun tracking</span>
       <a class="sidebar__mail" href="mailto:chiarugid@gmail.com?subject=rebluc">
         <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5"/></svg></span>
-        Scrivi all’autore
+        <span data-i18n="app.mailAuthor">Scrivi all’autore</span>
       </a>
     </div>
   </nav>
   <div class="scrim" id="scrim" hidden></div>
 
   <main class="main" id="main" tabindex="-1">
-    <nav class="breadcrumb" id="breadcrumb" aria-label="Percorso"></nav>
+    <nav class="breadcrumb" id="breadcrumb" aria-label="Percorso" data-i18n-attr="aria-label:app.breadcrumb"></nav>
     <div id="page">
-      <noscript><p>Questi strumenti richiedono JavaScript attivo nel browser.</p></noscript>
+      <noscript><p>Questi strumenti richiedono JavaScript attivo nel browser. · These tools need JavaScript enabled in the browser.</p></noscript>
     </div>
   </main>
 
   <dialog class="dialog" id="info-dialog" aria-labelledby="info-title">
     <section class="dashlet">
       <header class="dashlet__head">
-        <h2 class="dashlet__title" id="info-title">Informazioni</h2>
+        <h2 class="dashlet__title" id="info-title" data-i18n="app.info">Informazioni</h2>
         <div class="dashlet__actions">
-          <button class="icon-btn icon-btn--sm" type="button" data-close aria-label="Chiudi" title="Chiudi">
+          <button class="icon-btn icon-btn--sm" type="button" data-close aria-label="Chiudi" title="Chiudi" data-i18n-attr="aria-label:app.close;title:app.close">
             <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></span>
           </button>
         </div>
       </header>
       <div class="dashlet__body">
-        <p><strong>rebluc</strong> raccoglie strumenti di rete e VoIP che girano interamente nel browser.</p>
-        <p>Nessun backend, nessuna chiamata esterna, nessun tracking: i dati che inserisci non lasciano il dispositivo.
-           Le preferenze (tema, sidebar) restano solo nella memoria locale del browser.</p>
-        <p>Segnalazioni, idee o correzioni: <a href="mailto:chiarugid@gmail.com?subject=rebluc">scrivi all’autore</a>
+        <p><strong>rebluc</strong> <span data-i18n="app.infoIntro">raccoglie strumenti di rete e VoIP che girano interamente nel browser.</span></p>
+        <p data-i18n="app.infoPrivacy">Nessun backend, nessuna chiamata esterna, nessun tracking: i dati che inserisci non lasciano il dispositivo.</p>
+        <p><span data-i18n="app.infoFeedback">Segnalazioni, idee o correzioni:</span>
+           <a href="mailto:chiarugid@gmail.com?subject=rebluc" data-i18n="app.infoMail">scrivi all’autore</a>
            (chiarugid@gmail.com).</p>
-        <p class="muted">Font Inter, SIL Open Font License 1.1, ospitato localmente.
-           Sorgente: <a href="https://github.com/chiarugid/baleno" rel="noopener">github.com/chiarugid/baleno</a></p>
+        <p class="muted"><span data-i18n="app.infoCredits">Font Inter, SIL Open Font License 1.1, ospitato localmente. Sorgente:</span>
+           <a href="https://github.com/chiarugid/baleno" rel="noopener">github.com/chiarugid/baleno</a></p>
       </div>
     </section>
   </dialog>

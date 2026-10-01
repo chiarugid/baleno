@@ -1,76 +1,35 @@
-// Avvio: navigazione (routing con #), sidebar, tema, ricerca strumenti.
+// Avvio: navigazione (routing con #), sidebar, tema, lingua, ricerca strumenti.
 
 import { h, badge } from './ui/dom.js';
 import { icon } from './ui/icons.js';
 import { dashlet, closeMaximized } from './ui/dashlet.js';
+import { t, tAll, getLang, setLang, resolveLang, isLang } from './i18n.js';
 
 const SECTIONS = [
-  { id: 'indirizzamento', title: 'Indirizzamento', icon: 'network', description: 'Calcolo di reti, maschere e sottoreti IPv4 e IPv6.' },
-  { id: 'voce', title: 'Voce', icon: 'phone', description: 'Dimensionamento della banda VoIP e analisi dei messaggi SIP.' },
-  { id: 'qos', title: 'QoS', icon: 'qos', description: 'Marcature DSCP, CoS e ToS con i relativi PHB.' },
-  { id: 'wireless', title: 'Wireless', icon: 'wifi', description: 'Potenze RF, EIRP e budget di collegamento.' },
-  { id: 'l2', title: 'Strumenti L2', icon: 'l2', description: 'Formati degli indirizzi MAC e produttori (OUI).' },
+  { id: 'indirizzamento', icon: 'network' },
+  { id: 'voce', icon: 'phone' },
+  { id: 'qos', icon: 'qos' },
+  { id: 'wireless', icon: 'wifi' },
+  { id: 'l2', icon: 'l2' },
 ];
 
 const TOOLS = [
-  {
-    id: 'subnet', section: 'indirizzamento', title: 'Calcolatore subnet',
-    description: 'Rete, broadcast, range host, wildcard e suddivisione in sottoreti IPv4/IPv6.',
-    keywords: 'ip ipv4 ipv6 cidr maschera netmask wildcard broadcast sottoreti vlsm prefisso',
-    load: () => import('./tools/subnet.js'),
-  },
-  {
-    id: 'banda', section: 'voce', title: 'Calcolatore banda',
-    description: 'Banda per chiamata e per N chiamate con codec, packetization e overhead di rete.',
-    keywords: 'voip codec g711 g722 g729 opus bandwidth ethernet rtp udp 802.1q ipsec gre',
-    load: () => import('./tools/voip-bw.js'),
-  },
-  {
-    id: 'sip', section: 'voce', title: 'Parser SIP',
-    description: 'Scompone messaggi SIP e SDP ed evidenzia le anomalie più comuni.',
-    keywords: 'sip sdp invite header codec media rtp content-length',
-    load: () => import('./tools/sip-parser.js'),
-  },
-  {
-    id: 'codici', section: 'voce', title: 'Codici di risposta SIP',
-    description: 'Tutti i codici di risposta SIP con significato, RFC e mappatura verso le cause Q.850.',
-    keywords: 'sip risposta errore codice 404 486 487 503 q.850 q850 reason isup causa',
-    load: () => import('./tools/sip-codes.js'),
-  },
-  {
-    id: 'mos', section: 'voce', title: 'Stima MOS (E-model)',
-    description: 'Fattore R e MOS secondo ITU-T G.107 da codec, ritardo one-way, perdita di pacchetti e fattore di vantaggio.',
-    keywords: 'mos e-model g.107 fattore r qualità voce ritardo jitter perdita pacchetti g.114 g.109 ie bpl',
-    load: () => import('./tools/mos.js'),
-  },
-  {
-    id: 'pattern', section: 'voce', title: 'Tester pattern CUCM',
-    description: 'Verifica se un route o translation pattern combacia con un numero e mostra le trasformazioni passo per passo.',
-    keywords: 'cucm call manager route pattern translation pattern predot discard digits transform mask prefisso wildcard dial plan',
-    load: () => import('./tools/cucm.js'),
-  },
-  {
-    id: 'dscp', section: 'qos', title: 'Tabella DSCP',
-    description: 'DSCP, CoS, ToS e PHB in decimale, binario ed esadecimale, con ricerca.',
-    keywords: 'dscp cos tos phb ef af cs qos marcatura precedenza ecn traffic class 802.1p',
-    load: () => import('./tools/dscp.js'),
-  },
-  {
-    id: 'potenza', section: 'wireless', title: 'dBm / mW / EIRP',
-    description: 'Conversione dBm ↔ mW ↔ W, EIRP con limiti ETSI indicativi e budget di collegamento in spazio libero.',
-    keywords: 'dbm mw watt eirp potenza antenna dbi fspl link budget wifi wi-fi rf etsi sensibilità',
-    load: () => import('./tools/rf-power.js'),
-  },
-  {
-    id: 'mac', section: 'l2', title: 'Convertitore MAC',
-    description: 'Formati Cisco, due punti, trattini, senza separatori e lookup vendor OUI.',
-    keywords: 'mac oui vendor ethernet indirizzo hardware produttore eui-64 hsrp vrrp multicast',
-    load: () => import('./tools/mac.js'),
-  },
+  { id: 'subnet', section: 'indirizzamento', load: () => import('./tools/subnet.js') },
+  { id: 'banda', section: 'voce', load: () => import('./tools/voip-bw.js') },
+  { id: 'sip', section: 'voce', load: () => import('./tools/sip-parser.js') },
+  { id: 'codici', section: 'voce', load: () => import('./tools/sip-codes.js') },
+  { id: 'mos', section: 'voce', load: () => import('./tools/mos.js') },
+  { id: 'pattern', section: 'voce', load: () => import('./tools/cucm.js') },
+  { id: 'dscp', section: 'qos', load: () => import('./tools/dscp.js') },
+  { id: 'potenza', section: 'wireless', load: () => import('./tools/rf-power.js') },
+  { id: 'mac', section: 'l2', load: () => import('./tools/mac.js') },
 ];
 
 const sectionById = Object.fromEntries(SECTIONS.map((s) => [s.id, s]));
-const toolPath = (t) => `#/${t.section}/${t.id}`;
+const toolPath = (tool) => `#/${tool.section}/${tool.id}`;
+const sectionTitle = (s) => t(`section.${s.id}.title`);
+const toolTitle = (tool) => t(`tool.${tool.id}.title`);
+const toolDesc = (tool) => t(`tool.${tool.id}.desc`);
 
 const root = document.documentElement;
 const mqMobile = matchMedia('(max-width: 767px)');
@@ -78,6 +37,27 @@ const mqDark = matchMedia('(prefers-color-scheme: dark)');
 
 function store(key, value) {
   try { localStorage.setItem(key, value); } catch { /* storage non disponibile */ }
+}
+
+function read(key) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+
+// ---------------------------------------------------------------- Testi statici
+
+// Elementi di index.html marcati con data-i18n (testo) o data-i18n-attr ("attr:chiave;…").
+function applyStaticText() {
+  root.lang = getLang();
+  document.title = t('app.docTitle');
+  document.querySelector('meta[name="description"]')?.setAttribute('content', t('app.metaDescription'));
+  for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
+  for (const el of document.querySelectorAll('[data-i18n-attr]')) {
+    for (const pair of el.dataset.i18nAttr.split(';')) {
+      const [attr, key] = pair.split(':');
+      el.setAttribute(attr, t(key));
+    }
+  }
+  for (const btn of document.querySelectorAll('[data-lang]')) btn.setAttribute('aria-pressed', String(btn.dataset.lang === getLang()));
 }
 
 // ---------------------------------------------------------------- Sidebar
@@ -88,16 +68,16 @@ const scrim = document.getElementById('scrim');
 
 function buildNav() {
   const items = [
-    h('li', null, h('a', { class: 'nav__link', href: '#/', dataset: { route: '' }, title: 'Dashboard' },
-      icon('dashboard'), h('span', { class: 'nav__label' }, 'Dashboard'))),
+    h('li', null, h('a', { class: 'nav__link', href: '#/', dataset: { route: '' }, title: t('app.dashboard') },
+      icon('dashboard'), h('span', { class: 'nav__label' }, t('app.dashboard')))),
   ];
   for (const section of SECTIONS) {
-    const tools = TOOLS.filter((t) => t.section === section.id);
+    const tools = TOOLS.filter((tool) => tool.section === section.id);
     items.push(h('li', null,
-      h('a', { class: 'nav__link', href: `#/${section.id}`, dataset: { route: section.id }, title: section.title },
-        icon(section.icon), h('span', { class: 'nav__label' }, section.title)),
-      h('ul', null, tools.map((t) => h('li', null,
-        h('a', { class: 'nav__sublink', href: toolPath(t), dataset: { route: `${section.id}/${t.id}` } }, t.title))))));
+      h('a', { class: 'nav__link', href: `#/${section.id}`, dataset: { route: section.id }, title: sectionTitle(section) },
+        icon(section.icon), h('span', { class: 'nav__label' }, sectionTitle(section))),
+      h('ul', null, tools.map((tool) => h('li', null,
+        h('a', { class: 'nav__sublink', href: toolPath(tool), dataset: { route: `${section.id}/${tool.id}` } }, toolTitle(tool)))))));
   }
   navEl.replaceChildren(...items);
 }
@@ -119,7 +99,7 @@ function setNavOpen(open) {
   scrim.hidden = !open;
   if (mqMobile.matches) {
     navToggle.setAttribute('aria-expanded', String(open));
-    navToggle.setAttribute('aria-label', open ? 'Chiudi menu' : 'Apri menu');
+    navToggle.setAttribute('aria-label', open ? t('app.menuClose') : t('app.menuOpen'));
     navToggle.title = navToggle.getAttribute('aria-label');
   }
 }
@@ -128,12 +108,12 @@ function syncToggleState() {
   if (mqMobile.matches) {
     const open = root.classList.contains('nav-open');
     navToggle.setAttribute('aria-expanded', String(open));
-    navToggle.setAttribute('aria-label', open ? 'Chiudi menu' : 'Apri menu');
+    navToggle.setAttribute('aria-label', open ? t('app.menuClose') : t('app.menuOpen'));
   } else {
     setNavOpen(false);
     const collapsed = root.classList.contains('sidebar-collapsed');
     navToggle.setAttribute('aria-expanded', String(!collapsed));
-    navToggle.setAttribute('aria-label', collapsed ? 'Espandi menu' : 'Comprimi menu');
+    navToggle.setAttribute('aria-label', collapsed ? t('app.menuExpand') : t('app.menuCollapse'));
   }
   navToggle.title = navToggle.getAttribute('aria-label');
 }
@@ -164,7 +144,7 @@ function effectiveTheme() {
 function syncThemeButton() {
   const dark = effectiveTheme() === 'dark';
   themeBtn.replaceChildren(icon(dark ? 'sun' : 'moon'));
-  const label = dark ? 'Passa al tema chiaro' : 'Passa al tema scuro';
+  const label = dark ? t('app.themeLight') : t('app.themeDark');
   themeBtn.setAttribute('aria-label', label);
   themeBtn.title = label;
 }
@@ -176,6 +156,42 @@ themeBtn.addEventListener('click', () => {
   syncThemeButton();
 });
 mqDark.addEventListener('change', syncThemeButton);
+
+// ---------------------------------------------------------------- Lingua
+
+const LANG_KEY = 'rebluc.lang';
+
+// Riflette la lingua corrente nell'hash (?lang=…), conservando gli altri parametri.
+function syncLangInUrl() {
+  const raw = location.hash.replace(/^#/, '') || '/';
+  const [path, query = ''] = raw.split('?');
+  const params = new URLSearchParams(query);
+  if (params.get('lang') === getLang()) return;
+  params.set('lang', getLang());
+  history.replaceState(null, '', `#${path}?${params}`);
+}
+
+// Ricostruisce tutto ciò che contiene testo: statici, sidebar, pagina corrente.
+function refreshLanguage() {
+  applyStaticText();
+  buildNav();
+  syncToggleState();
+  syncThemeButton();
+  closeSearch();
+}
+
+function changeLang(lang) {
+  if (!isLang(lang) || lang === getLang()) return;
+  setLang(lang);
+  store(LANG_KEY, lang);
+  syncLangInUrl();
+  refreshLanguage();
+  route({ focus: false });
+}
+
+for (const btn of document.querySelectorAll('[data-lang]')) {
+  btn.addEventListener('click', () => changeLang(btn.dataset.lang));
+}
 
 // ---------------------------------------------------------------- Info
 
@@ -194,11 +210,15 @@ let searchIndex = 0;
 
 const normalize = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
+// Cerca nei testi di entrambe le lingue: "subnet calculator" e "calcolatore subnet" trovano lo stesso strumento.
 function searchTools(query) {
   const words = normalize(query).split(/\s+/).filter(Boolean);
   if (!words.length) return [];
-  return TOOLS.filter((t) => {
-    const hay = normalize(`${t.title} ${sectionById[t.section].title} ${t.keywords} ${t.description}`);
+  return TOOLS.filter((tool) => {
+    const hay = normalize([
+      tAll(`tool.${tool.id}.title`), tAll(`section.${tool.section}.title`),
+      tAll(`tool.${tool.id}.keywords`), tAll(`tool.${tool.id}.desc`),
+    ].join(' '));
     return words.every((w) => hay.includes(w));
   });
 }
@@ -208,11 +228,11 @@ function renderSearch() {
   if (!query) { closeSearch(); return; }
   searchHits = searchTools(query);
   searchIndex = 0;
-  const items = searchHits.map((t, i) => h('li', {
-    id: `sr-${t.id}`, role: 'option', 'aria-selected': String(i === searchIndex),
-    onmousedown: (e) => { e.preventDefault(); openHit(t); },
-  }, h('span', null, t.title), h('span', { class: 'sr-section' }, sectionById[t.section].title)));
-  if (!items.length) items.push(h('li', { class: 'sr-empty', role: 'presentation' }, 'Nessuno strumento trovato'));
+  const items = searchHits.map((tool, i) => h('li', {
+    id: `sr-${tool.id}`, role: 'option', 'aria-selected': String(i === searchIndex),
+    onmousedown: (e) => { e.preventDefault(); openHit(tool); },
+  }, h('span', null, toolTitle(tool)), h('span', { class: 'sr-section' }, sectionTitle(sectionById[tool.section]))));
+  if (!items.length) items.push(h('li', { class: 'sr-empty', role: 'presentation' }, t('app.searchNone')));
   searchList.replaceChildren(...items);
   searchList.hidden = false;
   searchInput.setAttribute('aria-expanded', 'true');
@@ -299,21 +319,21 @@ async function toolCard(tool) {
   const section = sectionById[tool.section];
   let href = toolPath(tool);
   const card = dashlet({
-    title: tool.title,
-    subtitle: section.title,
+    title: toolTitle(tool),
+    subtitle: sectionTitle(section),
     expandable: false,
     className: 'dashlet--link',
-    actions: [{ icon: 'arrowRight', label: `Apri ${tool.title}`, onclick: () => { location.hash = href; } }],
+    actions: [{ icon: 'arrowRight', label: t('app.open', { name: toolTitle(tool) }), onclick: () => { location.hash = href; } }],
   });
   if (tool.load) {
     const mod = await tool.load();
     const pv = mod.preview();
     href += pv.href ?? '';
-    card.body.append(h('p', { class: 'muted', style: 'margin:0 0 10px' }, tool.description), pv.body);
+    card.body.append(h('p', { class: 'muted', style: 'margin:0 0 10px' }, toolDesc(tool)), pv.body);
   } else {
-    card.body.append(h('p', { class: 'muted', style: 'margin:0 0 12px' }, tool.description), badge('In sviluppo', 'warn'));
+    card.body.append(h('p', { class: 'muted', style: 'margin:0 0 12px' }, toolDesc(tool)), badge(t('app.inDevelopment'), 'warn'));
   }
-  card.el.append(h('div', { class: 'dashlet__foot' }, h('a', { href }, tool.load ? 'Apri strumento ›' : 'Dettagli ›')));
+  card.el.append(h('div', { class: 'dashlet__foot' }, h('a', { href }, tool.load ? t('app.openTool') : t('app.details'))));
   card.el.addEventListener('click', (e) => {
     if (e.target.closest('a, button')) return;
     location.hash = href;
@@ -322,47 +342,49 @@ async function toolCard(tool) {
 }
 
 async function renderDashboard() {
-  setCrumbs([{ title: 'Dashboard' }]);
-  document.title = 'Dashboard · rebluc';
+  setCrumbs([{ title: t('app.dashboard') }]);
+  document.title = `${t('app.dashboard')} · rebluc`;
   const cards = await Promise.all(TOOLS.map(toolCard));
   return [
-    pageHead('Dashboard', 'Strumenti di rete e VoIP. Tutti i calcoli avvengono nel browser: nessun dato lascia il dispositivo.'),
+    pageHead(t('app.dashboard'), t('app.dashboardIntro')),
     h('div', { class: 'dash-grid' }, cards),
   ];
 }
 
 async function renderSection(section) {
-  setCrumbs([{ title: section.title }]);
-  document.title = `${section.title} · rebluc`;
-  const cards = await Promise.all(TOOLS.filter((t) => t.section === section.id).map(toolCard));
-  return [pageHead(section.title, section.description), h('div', { class: 'dash-grid' }, cards)];
+  setCrumbs([{ title: sectionTitle(section) }]);
+  document.title = `${sectionTitle(section)} · rebluc`;
+  const cards = await Promise.all(TOOLS.filter((tool) => tool.section === section.id).map(toolCard));
+  return [pageHead(sectionTitle(section), t(`section.${section.id}.desc`)), h('div', { class: 'dash-grid' }, cards)];
 }
 
 async function renderTool(section, tool, params) {
-  setCrumbs([{ title: section.title, href: `#/${section.id}` }, { title: tool.title }]);
-  document.title = `${tool.title} · rebluc`;
-  const head = pageHead(tool.title, tool.description);
+  setCrumbs([{ title: sectionTitle(section), href: `#/${section.id}` }, { title: toolTitle(tool) }]);
+  document.title = `${toolTitle(tool)} · rebluc`;
+  const head = pageHead(toolTitle(tool), toolDesc(tool));
   if (!tool.load) {
-    const card = dashlet({ title: 'In sviluppo', expandable: false });
-    card.body.append(h('p', { class: 'empty' }, 'Questo strumento sarà disponibile a breve.'));
+    const card = dashlet({ title: t('app.inDevelopment'), expandable: false });
+    card.body.append(h('p', { class: 'empty' }, t('app.comingSoon')));
     return [head, card.el];
   }
   const mod = await tool.load();
   const holder = h('div');
   const ctx = {
+    // I parametri dello strumento restano nell'hash insieme alla lingua.
     setParams(values) {
-      const qs = new URLSearchParams(Object.entries(values).filter(([, v]) => v)).toString();
-      history.replaceState(null, '', `${toolPath(tool)}${qs ? `?${qs}` : ''}`);
+      const qs = new URLSearchParams(Object.entries(values).filter(([, v]) => v));
+      qs.set('lang', getLang());
+      history.replaceState(null, '', `${toolPath(tool)}?${qs}`);
     },
   };
   return [head, holder, () => mod.render(holder, params, ctx)];
 }
 
 function renderNotFound() {
-  setCrumbs([{ title: 'Dashboard', href: '#/' }, { title: 'Pagina non trovata' }]);
-  document.title = 'Pagina non trovata · rebluc';
-  const card = dashlet({ title: 'Pagina non trovata', expandable: false });
-  card.body.append(h('p', { class: 'empty' }, 'L’indirizzo non corrisponde a nessuno strumento. ', h('a', { href: '#/' }, 'Torna alla Dashboard')));
+  setCrumbs([{ title: t('app.dashboard'), href: '#/' }, { title: t('app.notFound') }]);
+  document.title = `${t('app.notFound')} · rebluc`;
+  const card = dashlet({ title: t('app.notFound'), expandable: false });
+  card.body.append(h('p', { class: 'empty' }, `${t('app.notFoundText')} `, h('a', { href: '#/' }, t('app.backHome'))));
   return [card.el];
 }
 
@@ -371,9 +393,19 @@ async function route({ focus = true } = {}) {
   closeMaximized();
   setNavOpen(false);
   const { parts, params } = parseHash();
+
+  // Un link con ?lang=… diverso dalla lingua attiva la cambia (e diventa la preferenza).
+  const urlLang = params.get('lang');
+  if (isLang(urlLang) && urlLang !== getLang()) {
+    setLang(urlLang);
+    store(LANG_KEY, urlLang);
+    refreshLanguage();
+  }
+  syncLangInUrl();
+
   const [sectionId, toolId, ...rest] = parts;
   const section = sectionById[sectionId];
-  const tool = section && TOOLS.find((t) => t.section === section.id && t.id === toolId);
+  const tool = section && TOOLS.find((x) => x.section === section.id && x.id === toolId);
 
   let nodes;
   try {
@@ -383,8 +415,8 @@ async function route({ focus = true } = {}) {
     else { nodes = renderNotFound(); updateNav('-', null); }
   } catch (err) {
     console.error(err);
-    const card = dashlet({ title: 'Errore', expandable: false });
-    card.body.append(h('p', { class: 'empty' }, 'Impossibile caricare la pagina. Ricarica e riprova.'));
+    const card = dashlet({ title: t('app.error'), expandable: false });
+    card.body.append(h('p', { class: 'empty' }, t('app.loadError')));
     nodes = [card.el];
   }
   if (token !== renderToken) return;
@@ -398,6 +430,8 @@ async function route({ focus = true } = {}) {
 
 // ---------------------------------------------------------------- Avvio
 
+setLang(resolveLang(parseHash().params.get('lang'), read(LANG_KEY)));
+applyStaticText();
 buildNav();
 syncToggleState();
 syncThemeButton();

@@ -3,6 +3,7 @@
 
 import { h, fmtDec, kvList, badge, uid } from '../ui/dom.js';
 import { dashlet } from '../ui/dashlet.js';
+import { t, locale } from '../i18n.js';
 import { BANDS } from '../../data/rf-limits.js';
 
 // ---------------------------------------------------------------- Calcoli
@@ -38,9 +39,12 @@ export function linkBudget({ eirpDbm, distanceKm, freqMHz, rxGainDbi = 0, rxLoss
   return result;
 }
 
+export const bandLabel = (id) => t(`rf.band.${id || 'none'}.label`);
+
 export function bandCheck(eirpDbm, bandId) {
-  const band = BANDS.find((b) => b.id === bandId && b.eirp != null);
-  if (!band) return null;
+  const found = BANDS.find((b) => b.id === bandId && b.eirp != null);
+  if (!found) return null;
+  const band = { ...found, label: bandLabel(found.id), note: t(`rf.band.${found.id}.note`) };
   return { band, limit: band.eirp, excess: eirpDbm - band.eirp, ok: eirpDbm <= band.eirp + 1e-9 };
 }
 
@@ -53,8 +57,8 @@ export function parseNumber(text) {
 
 // ---------------------------------------------------------------- Formattazione
 
-const sig = new Intl.NumberFormat('it-IT', { maximumSignificantDigits: 6, useGrouping: false });
-const fmtSig = (n) => sig.format(n);
+// Valori nei campi: 6 cifre significative, separatore decimale della lingua corrente.
+const fmtSig = (n) => new Intl.NumberFormat(locale(), { maximumSignificantDigits: 6, useGrouping: false }).format(n);
 
 export function formatPower(mw) {
   if (mw >= 1000) return `${fmtDec(mw / 1000, 3)} W`;
@@ -107,42 +111,42 @@ export function render(container, params, ctx) {
   const w = numberField(uid('w'), 'W');
   const dbw = h('dd', null);
   const convPower = h('dd', { class: 'hl' });
-  const convDl = dashlet({ title: 'Conversione', expandable: false, onReset: () => { dbm.input.value = DEFAULTS.dbm; fromDbm(); } });
+  const convDl = dashlet({ title: t('rf.conversion'), expandable: false, onReset: () => { dbm.input.value = DEFAULTS.dbm; fromDbm(); } });
   convDl.body.append(
     h('div', { class: 'field-row field-row--3' }, dbm.el, mw.el, w.el),
     h('div', { class: 'examples' },
-      h('span', { class: 'examples__label' }, 'Esempi'),
+      h('span', { class: 'examples__label' }, t('ui.examples')),
       DBM_EXAMPLES.map((x) => h('button', { type: 'button', class: 'chip', onclick: () => { dbm.input.value = x; fromDbm(); } }, `${x.replace('-', '−')} dBm`))),
-    h('dl', { class: 'kv kv--compact' }, h('dt', null, 'Potenza'), convPower, h('dt', null, 'dBW'), dbw),
-    h('p', { class: 'field__hint' }, 'P(mW) = 10^(dBm/10). Modifica un campo qualsiasi: gli altri si aggiornano.'));
+    h('dl', { class: 'kv kv--compact' }, h('dt', null, t('rf.power')), convPower, h('dt', null, 'dBW'), dbw),
+    h('p', { class: 'field__hint' }, t('rf.convHint')));
 
   // --- EIRP
-  const tx = numberField(uid('tx'), 'Potenza Tx', 'dBm');
-  const loss = numberField(uid('loss'), 'Perdita cavo', 'dB');
-  const gain = numberField(uid('gain'), 'Guadagno antenna', 'dBi');
+  const tx = numberField(uid('tx'), t('rf.txPower'), 'dBm');
+  const loss = numberField(uid('loss'), t('rf.cableLoss'), 'dB');
+  const gain = numberField(uid('gain'), t('rf.antennaGain'), 'dBi');
   const bandId = uid('band');
-  const bandSelect = h('select', { id: bandId, class: 'input' }, BANDS.map((b) => h('option', { value: b.id }, b.label)));
+  const bandSelect = h('select', { id: bandId, class: 'input' }, BANDS.map((b) => h('option', { value: b.id }, bandLabel(b.id))));
   const eirpOut = h('div');
   const eirpDl = dashlet({ title: 'EIRP', expandable: false, onReset: () => {
     tx.input.value = DEFAULTS.tx; loss.input.value = DEFAULTS.loss; gain.input.value = DEFAULTS.gain; bandSelect.value = DEFAULTS.band; update();
   } });
   eirpDl.body.append(
     h('div', { class: 'field-row field-row--3' }, tx.el, loss.el, gain.el),
-    h('div', { class: 'field' }, h('label', { for: bandId }, 'Confronta con il limite EIRP della banda'), bandSelect),
+    h('div', { class: 'field' }, h('label', { for: bandId }, t('rf.compareBand')), bandSelect),
     eirpOut);
 
   // --- Budget di collegamento
-  const dist = numberField(uid('d'), 'Distanza');
-  const unitSelect = h('select', { class: 'input', 'aria-label': 'Unità della distanza' }, h('option', { value: 'm' }, 'm'), h('option', { value: 'km' }, 'km'));
+  const dist = numberField(uid('d'), t('rf.distance'));
+  const unitSelect = h('select', { class: 'input', 'aria-label': t('rf.distanceUnit') }, h('option', { value: 'm' }, 'm'), h('option', { value: 'km' }, 'km'));
   const distGroup = h('div', { class: 'input-group' });
   dist.input.replaceWith(distGroup);
   distGroup.append(dist.input, unitSelect);
-  const freq = numberField(uid('f'), 'Frequenza', 'MHz');
-  const grx = numberField(uid('grx'), 'Guadagno antenna Rx', 'dBi');
-  const lrx = numberField(uid('lrx'), 'Perdita cavo Rx', 'dB');
-  const sens = numberField(uid('rssi'), 'RSSI di progetto', 'dBm', { placeholder: 'facoltativo' });
+  const freq = numberField(uid('f'), t('rf.frequency'), 'MHz');
+  const grx = numberField(uid('grx'), t('rf.rxGain'), 'dBi');
+  const lrx = numberField(uid('lrx'), t('rf.rxLoss'), 'dB');
+  const sens = numberField(uid('rssi'), t('rf.targetRssi'), 'dBm', { placeholder: t('ui.optional') });
   const budgetOut = h('div');
-  const budgetDl = dashlet({ title: 'Budget di collegamento', subtitle: 'spazio libero, usa l’EIRP sopra', className: 'span-all', onReset: () => {
+  const budgetDl = dashlet({ title: t('rf.budgetTitle'), subtitle: t('rf.budgetSub'), className: 'span-all', onReset: () => {
     for (const [f, k] of [[dist, 'd'], [freq, 'f'], [grx, 'grx'], [lrx, 'lrx'], [sens, 'rssi']]) f.input.value = DEFAULTS[k];
     unitSelect.value = DEFAULTS.unit; update();
   } });
@@ -150,11 +154,11 @@ export function render(container, params, ctx) {
     h('div', null,
       h('div', { class: 'field-row field-row--2' }, dist.el, freq.el),
       h('div', { class: 'examples' },
-        h('span', { class: 'examples__label' }, 'Canali'),
+        h('span', { class: 'examples__label' }, t('rf.channels')),
         FREQ_EXAMPLES.map(([f, label]) => h('button', { type: 'button', class: 'chip', title: `${f} MHz`, onclick: () => { freq.input.value = f; update(); } }, label))),
       h('div', { class: 'field-row field-row--3' }, grx.el, lrx.el, sens.el),
-      h('p', { class: 'field__hint' }, 'RSSI di progetto: il livello minimo che vuoi garantire al client (−67 dBm è il valore tipico per la voce su Wi-Fi). Non è la sensibilità del ricevitore, che è molto più bassa (circa −90 dBm ai rate minimi).'),
-      h('p', { class: 'field__hint' }, 'FSPL = 20·log₁₀(d km) + 20·log₁₀(f MHz) + 32,44. Non considera muri, ostacoli, zona di Fresnel né multipath: in interni la perdita reale è maggiore.')),
+      h('p', { class: 'field__hint' }, t('rf.rssiHint')),
+      h('p', { class: 'field__hint' }, t('rf.fsplHint'))),
     budgetOut));
 
   container.append(h('div', { class: 'tool-grid tool-grid--half' }, convDl.el, eirpDl.el, budgetDl.el));
@@ -173,14 +177,14 @@ export function render(container, params, ctx) {
 
   function fromDbm() {
     const n = parseNumber(dbm.input.value);
-    if (n == null) return setError(dbm, 'Numero non valido.');
+    if (n == null) return setError(dbm, t('ui.invalidNumber'));
     showConversion(dbmToMw(n), 'dbm');
   }
 
   function fromLinear(field, factor, source) {
     const n = parseNumber(field.input.value);
-    if (n == null) return setError(field, 'Numero non valido.');
-    if (n <= 0) return setError(field, 'La potenza in scala lineare deve essere maggiore di zero.');
+    if (n == null) return setError(field, t('ui.invalidNumber'));
+    if (n <= 0) return setError(field, t('rf.err.linear'));
     showConversion(n * factor, source);
   }
 
@@ -192,7 +196,7 @@ export function render(container, params, ctx) {
     const raw = field.input.value.trim();
     if (!raw && !required) { setError(field); return { ok: true, value: null }; }
     const n = parseNumber(raw);
-    setError(field, n == null ? 'Numero non valido.' : null);
+    setError(field, n == null ? t('ui.invalidNumber') : null);
     return { ok: n != null, value: n };
   }
 
@@ -203,15 +207,15 @@ export function render(container, params, ctx) {
     const check = bandCheck(e, bandSelect.value);
     const nodes = [h('div', { class: 'kpis' },
       kpi('EIRP', fmtDec(e, 2), 'dBm', true),
-      kpi('EIRP lineare', formatPower(dbmToMw(e))),
-      kpi('Limite banda', check ? fmtDec(check.limit, 0) : '—', check ? 'dBm' : ''),
-      kpi('Esito', check ? (check.ok ? 'Entro' : 'Oltre') : '—', '', check ? (check.ok ? 'ok' : 'err') : false))];
+      kpi(t('rf.eirpLinear'), formatPower(dbmToMw(e))),
+      kpi(t('rf.bandLimit'), check ? fmtDec(check.limit, 0) : '—', check ? 'dBm' : ''),
+      kpi(t('rf.outcome'), check ? (check.ok ? t('rf.within') : t('rf.over')) : '—', '', check ? (check.ok ? 'ok' : 'err') : false))];
     if (check) {
       nodes.push(h('ul', { class: 'notes' },
         h('li', { class: `note${check.ok ? '' : ' note--err'}` },
-          badge(check.ok ? 'entro il limite' : `oltre di ${fmtDec(check.excess, 2)} dB`, check.ok ? 'ok' : 'err'), ' ',
-          check.band.note, check.band.psd != null ? ` Limite di densità: ${check.band.psd} dBm/MHz.` : ''),
-        h('li', { class: 'note' }, 'Valori indicativi: verifica la normativa nazionale e le condizioni d’uso (TPC, DFS, interno/esterno).')));
+          badge(check.ok ? t('rf.withinLimit') : t('rf.overBy', { n: fmtDec(check.excess, 2) }), check.ok ? 'ok' : 'err'), ' ',
+          check.band.note, check.band.psd != null ? t('rf.psd', { n: check.band.psd }) : ''),
+        h('li', { class: 'note' }, t('rf.indicative'))));
     }
     eirpOut.replaceChildren(...nodes);
 
@@ -220,8 +224,8 @@ export function render(container, params, ctx) {
     let budgetNodes;
     if (Object.values(b).every((x) => x.ok)) {
       const distanceKm = unitSelect.value === 'km' ? b.d.value : b.d.value / 1000;
-      if (!(distanceKm > 0)) setError(dist, 'La distanza deve essere maggiore di zero.');
-      if (!(b.f.value > 0)) setError(freq, 'La frequenza deve essere maggiore di zero.');
+      if (!(distanceKm > 0)) setError(dist, t('rf.err.distance'));
+      if (!(b.f.value > 0)) setError(freq, t('rf.err.frequency'));
       const lb = linkBudget({ eirpDbm: e, distanceKm, freqMHz: b.f.value, rxGainDbi: b.grx.value, rxLossDb: b.lrx.value, targetRssiDbm: b.rssi.value });
       if (lb) {
         // Sopra l'RSSI di progetto con almeno 5 dB di riserva: ok; tra 0 e 5: al limite; sotto: insufficiente.
@@ -229,22 +233,22 @@ export function render(container, params, ctx) {
         budgetNodes = [
           h('div', { class: 'kpis' },
             kpi('FSPL', fmtDec(lb.fspl, 2), 'dB'),
-            kpi('Potenza ricevuta', fmtDec(lb.rxDbm, 2), 'dBm', true),
-            kpi('Margine su RSSI', lb.margin == null ? '—' : fmtDec(lb.margin, 2), lb.margin == null ? '' : 'dB', marginKind ?? false),
-            kpi('Distanza max', lb.maxDistanceKm == null ? '—' : formatDistance(lb.maxDistanceKm))),
+            kpi(t('rf.rxPower'), fmtDec(lb.rxDbm, 2), 'dBm', true),
+            kpi(t('rf.marginRssi'), lb.margin == null ? '—' : fmtDec(lb.margin, 2), lb.margin == null ? '' : 'dB', marginKind ?? false),
+            kpi(t('rf.maxDistance'), lb.maxDistanceKm == null ? '—' : formatDistance(lb.maxDistanceKm))),
           kvList([
             { label: 'EIRP', value: `${fmtDec(e, 2)} dBm` },
             { label: '− FSPL', value: `${fmtDec(lb.fspl, 2)} dB` },
-            { label: '+ guadagno Rx', value: `${fmtDec(b.grx.value, 2)} dBi` },
-            { label: '− perdita cavo Rx', value: `${fmtDec(b.lrx.value, 2)} dB` },
-            { label: '= potenza ricevuta', value: `${fmtDec(lb.rxDbm, 2)} dBm (${formatPower(dbmToMw(lb.rxDbm))})`, hl: true },
-            lb.margin != null ? { label: 'Margine sull’RSSI di progetto', value: [`${fmtDec(lb.margin, 2)} dB `, badge(marginKind === 'ok' ? 'sopra il target' : marginKind === 'warn' ? 'al limite' : 'sotto il target', marginKind)] } : null,
-            lb.maxDistanceKm != null ? { label: 'Distanza all’RSSI di progetto', value: [formatDistance(lb.maxDistanceKm), h('span', { class: 'sub' }, 'teorica, spazio libero')] } : null,
+            { label: t('rf.plusRxGain'), value: `${fmtDec(b.grx.value, 2)} dBi` },
+            { label: t('rf.minusRxLoss'), value: `${fmtDec(b.lrx.value, 2)} dB` },
+            { label: t('rf.equalsRx'), value: `${fmtDec(lb.rxDbm, 2)} dBm (${formatPower(dbmToMw(lb.rxDbm))})`, hl: true },
+            lb.margin != null ? { label: t('rf.marginLabel'), value: [`${fmtDec(lb.margin, 2)} dB `, badge(marginKind === 'ok' ? t('rf.marginOk') : marginKind === 'warn' ? t('rf.marginWarn') : t('rf.marginErr'), marginKind)] } : null,
+            lb.maxDistanceKm != null ? { label: t('rf.distanceToRssi'), value: [formatDistance(lb.maxDistanceKm), h('span', { class: 'sub' }, t('rf.theoretical'))] } : null,
           ], 'kv--compact'),
         ];
       }
     }
-    budgetOut.replaceChildren(...(budgetNodes ?? [h('p', { class: 'empty' }, 'Completa i campi per calcolare il budget.')]));
+    budgetOut.replaceChildren(...(budgetNodes ?? [h('p', { class: 'empty' }, t('rf.incomplete'))]));
     saveParams();
   }
 
@@ -284,7 +288,7 @@ export function preview() {
       { label: '20 dBm', value: formatPower(dbmToMw(20)) },
       { label: '30 dBm', value: formatPower(dbmToMw(30)) },
       { label: 'EIRP 17 − 1 + 4', value: `${fmtDec(e, 0)} dBm`, hl: true },
-      { label: 'FSPL 2,4 GHz, 1 km', value: `${fmtDec(fspl(1, 2400), 1)} dB` },
+      { label: t('rf.previewFspl'), value: `${fmtDec(fspl(1, 2400), 1)} dB` },
     ], 'kv--compact'),
   };
 }

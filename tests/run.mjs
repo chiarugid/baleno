@@ -800,7 +800,7 @@ test('elenco completo, ordinato e senza duplicati', () => {
   for (const c of [100, 180, 183, 200, 302, 401, 403, 404, 407, 408, 480, 481, 486, 487, 488, 491, 500, 502, 503, 504, 600, 603, 607, 608]) {
     assert.ok(codes.includes(c), `manca ${c}`);
   }
-  assert.ok(SIP_CODES.every((c) => c.reason && c.rfc.startsWith('RFC ') && c.description.length > 20));
+  assert.ok(SIP_CODES.every((c) => c.reason && c.rfc.startsWith('RFC ') && findCode(c.code).description.length > 20));
 });
 
 test('classi 1xx–6xx', () => {
@@ -1261,6 +1261,139 @@ test('pattern non validi e macro @ non supportata', () => {
   assert.equal(testPattern({ pattern: 'XXXX', dialed: '1234', discard: 'predot' }).field, 'discard');
   assert.equal(testPattern({ pattern: 'XXXX', dialed: '12a4' }).field, 'dialed');
   assert.equal(testPattern({ pattern: 'XXXX', dialed: '1234', mask: '12Y' }).field, 'mask');
+});
+
+console.log('Lingue (IT / EN)');
+
+const { MESSAGES, LANGS, setLang, getLang, t: tr, tn: trn, resolveLang } = await import('../js/i18n.js');
+
+// Parole tipicamente italiane che non devono comparire nei testi inglesi.
+// Escluse quelle ambigue in inglese (per, come, solo, …).
+const ITALIAN = /(?:^|[^\p{L}])(il|lo|gli|della|delle|dei|degli|dello|nel|nella|nelle|dal|dalla|con|una|uno|sono|che|questo|questa|anche|senza|oppure|ogni|più|già|perché|cifre|cifra|numero|valore|errore|avviso|indirizzo|sottorete|sottoreti|chiamata|chiamate|banda|perdita|ritardo|rete|campo|pagina|righe|riga|esempi|esempio|codici|codice|tabella|corrisponde|verificato|stima|sviluppo|lingua|visite|gruppo|porta|valido|obbligatorio|presente|assente|prefisso|maschera|inserisci|nessun|nessuna|nessuno|manca|deve|può|essere|tra|fra|sul|sulla|non è)(?=$|[^\p{L}])|[àèìòù]/iu;
+const italianIn = (text) => (ITALIAN.exec(String(text)) || [null])[0];
+const placeholders = (s) => [...String(s).matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
+
+test('ogni chiave esiste in italiano e in inglese, senza stringhe vuote', () => {
+  assert.deepEqual(LANGS, ['it', 'en']);
+  const itKeys = Object.keys(MESSAGES.it).sort();
+  const enKeys = Object.keys(MESSAGES.en).sort();
+  assert.ok(itKeys.length > 500, `chiavi: ${itKeys.length}`);
+  assert.deepEqual(enKeys, itKeys, 'chiavi orfane o lingua mancante');
+  for (const key of itKeys) {
+    for (const lang of LANGS) {
+      const v = MESSAGES[lang][key];
+      assert.equal(typeof v, 'string', `${lang}.${key} non è una stringa`);
+      assert.ok(v.length > 0, `${lang}.${key} vuota`);
+    }
+  }
+});
+
+test('stessi segnaposto {…} nelle due lingue', () => {
+  for (const key of Object.keys(MESSAGES.it)) {
+    assert.deepEqual(placeholders(MESSAGES.en[key]), placeholders(MESSAGES.it[key]), key);
+  }
+});
+
+test('nessun testo italiano nelle traduzioni inglesi', () => {
+  const offenders = Object.entries(MESSAGES.en).filter(([, v]) => italianIn(v)).map(([k, v]) => `${k}: "${italianIn(v)}" in ${v}`);
+  assert.deepEqual(offenders, []);
+});
+
+test('lingua iniziale: URL > preferenza salvata > italiano', () => {
+  assert.equal(resolveLang('en', 'it'), 'en');
+  assert.equal(resolveLang(null, 'en'), 'en');
+  assert.equal(resolveLang('xx', 'yy'), 'it');
+  assert.equal(resolveLang(null, null), 'it');
+});
+
+test('in inglese i messaggi degli strumenti non contengono italiano', () => {
+  setLang('en');
+  try {
+    assert.equal(getLang(), 'en');
+    const outputs = [];
+    const collect = (x) => {
+      if (x == null) return;
+      if (typeof x === 'string') outputs.push(x);
+      else if (Array.isArray(x)) x.forEach(collect);
+      else if (typeof x === 'object') for (const k of ['error', 'reason', 'message', 'label', 'meaning', 'detail', 'rule', 'note', 'statusClass', 'type', 'class', 'special', 'dropName', 'ecnName', 'description']) collect(x[k]);
+    };
+    // subnet
+    for (const [a, m] of [['', ''], ['300.1.1.1/24', ''], ['10.0.0.0', ''], ['10.0.0.0/40', ''], ['10.0.0.0', '255.0.255.0'], ['2001:db8::', '255.0.0.0'], ['zz::1/64', ''], ['192.168.1.0/24', ''], ['10.1.1.1/31', ''], ['8.8.8.8/32', ''], ['240.0.0.1/4', ''], ['2001:db8::/32', ''], ['fe80::1/64', ''], ['::/128', '']]) {
+      const r = calc(a, m);
+      collect(r);
+      if (r.ok) collect(subnet.resultAsText(r));
+    }
+    const base = calc('192.168.10.0/26');
+    for (const [mode, v] of [['prefix', 'x'], ['prefix', '26'], ['prefix', '40'], ['hosts', '500'], ['count', '0'], ['nope', '1']]) collect(subdivide(base, mode, v));
+    collect(subdivide(calc('2001:db8::/16'), 'prefix', '64'));
+    collect(splitPlan(5000).notes);
+    collect(splitPlan(100000).notes);
+    collect(subnetsCsv(subdivide(calc('10.0.0.0/8'), 'prefix', '30'), 4));
+    collect(subnetsCsv(subdivide(calc('10.0.0.0/24'), 'prefix', '26'), 4).text);
+    // VoIP
+    for (const o of [{ codec: 'x' }, { codec: 'opus', bitrate: 1 }, { ptime: 7 }, { calls: 0 }, { ipVersion: 5 }, { activity: 2 }, { srtp: 'x' }, { ipsec: 'x' }, { ipsec: 'tunnel', srtp: 'sha1-80', gre: true, natt: true, dot1q: true, preamble: true }, { ipsec: 'transport', cipher: 'gcm', codec: 'opus', bitrate: 24 }]) {
+      const r = calcVoip(o);
+      collect(r);
+      if (r.ok) collect(r.layers);
+    }
+    // SIP: esempi e messaggi costruiti per far scattare ogni anomalia
+    const anomalous = [
+      ...Object.values(SIP_EXAMPLES),
+      'garbage line\nfoo SIP/2.0',
+      'hello',
+      'log line\nInvite sip:a@x SIP/3.0\nVia: bogus\nVia: SIP/2.0/UDP 10.0.0.1:5060\nCSeq: x\nCSeq: 1 BYE\nMax-Forwards: abc\nFrom: a\nTo: b\nTo: c\nCall-ID: 1\nContact: <sip:a@10.0.0.1>\nEmpty:\nnocolon\nContent-Type: text/plain\nContent-Length: zz\n\nv=0',
+      'FOO a@x SIP/2.0\nVia: SIP/2.0/UDP 10.0.0.1:5060;branch=z9hG4bK1;received=203.0.113.9;rport=4000\nMax-Forwards: 0\nFrom: <sip:a@x>\nTo: <sip:b@x>\nCall-ID: 1\nCSeq: 99999999999 FOO\nSession-Expires: abc\nContent-Length: 500\n\nv=1\nbad line\nm=audio 4001 RTP/SAVP 0 96 50\na=rtpmap:97 PCMU/8000\na=rtpmap:x\na=crypto:1 x\na=inactive',
+      'BYE sip:a@x SIP/2.0\nVia: SIP/2.0/UDP 192.0.2.1;branch=z9hG4bK1\nMax-Forwards: 70\nFrom: <sip:a@x>;tag=1\nTo: <sip:b@x>\nCall-ID: 1\nCSeq: 2 BYE\nSession-Expires: 60;refresher=foo\nMin-SE: 90\nContent-Type: application/sdp\nContent-Length: 0',
+      'NOTIFY sip:a@x SIP/2.0\nVia: SIP/2.0/UDP 192.0.2.1;branch=z9hG4bK1\nMax-Forwards: 70\nFrom: <sip:a@x>;tag=1\nTo: <sip:b@x>\nCall-ID: 1\nCSeq: 2 NOTIFY\nSession-Expires: 1800\nContent-Type: text/plain\nContent-Length: 1\n\nv=0\no=- 1 1 IN IP4 0.0.0.0\ns=-\nt=0 0\nc=IN IP4 0.0.0.0\nm=audio 0 RTP/AVP 0',
+      'SIP/2.0 999 Odd\nVia: SIP/2.0/UDP 10.1.1.1;branch=z9hG4bK1\nFrom: <sip:a@x>;tag=1\nTo: <sip:b@x>\nCall-ID: 1\nCSeq: 1 INVITE\nContent-Type: application/sdp\nContent-Length: 10\n\nv=0\no=- 1 1 IN IP6 fd00::1\ns=-\nt=0 0\nm=audio 4000 RTP/AVP 0 101\nc=IN IP6 fd00::2\na=rtpmap:101 telephone-event/8000\na=sendonly',
+      'INVITE sip:a@x SIP/2.0\nVia: SIP/2.0/UDP 192.0.2.1;branch=z9hG4bK1\nMax-Forwards: 70\nFrom: <sip:a@x>;tag=1\nTo: <sip:b@x>\nCall-ID: 1\nCSeq: 1 INVITE\nContact: <sip:a@192.0.2.1>\nContent-Length: 0',
+    ];
+    for (const text of anomalous) {
+      const m = parseSip(text);
+      collect(m.issues.map((i) => i.message));
+      collect(m.statusClass);
+      if (m.sdp) collect(m.sdp.media.map((x) => x.telephoneEvent?.description));
+      if (m.sbc) collect(m.sbc.reason.map((x) => x.meaning));
+    }
+    collect(describeEvents('0-16'));
+    // codici SIP, DSCP, MAC, MOS, CUCM, RF
+    collect(filterCodes().map((c) => [c.description, c.label]));
+    for (const v of [['', 'dscp'], ['XYZ', 'dscp'], ['zz', 'dscp'], ['300', 'tos'], ['9', 'prec'], ['70', 'dscp'], ['0xB9', 'tos'], ['45', 'dscp']]) {
+      const p = parseValue(...v);
+      collect(p);
+      if (p.ok) collect(dscpInfo(p.dscp, p.ecn));
+    }
+    collect(dscpInfo(34));
+    for (const v of ['', '00:5', 'zz:zz:zz:zz:zz:zz']) collect(parseMac(v));
+    for (const hex of ['FFFFFFFFFFFF', '01005E0000FB', '333300000001', '00005E000105', '00005E000201', '00000C07AC0A', '00000C9FF123', '0007B4000102', '525400123456', '0180C200000E']) collect(specialAddress(hex));
+    for (const o of [{ codec: 'x' }, { delayMs: -1 }, { lossPct: 200 }, { codec: 'opus', bitrate: 16, delayMs: 500, lossPct: 3 }, { codec: 'g722' }]) collect(emodel(o));
+    for (const r of [95, 85, 75, 65, 30]) collect(category(r).label);
+    for (const o of [
+      { pattern: '' }, { pattern: '9.@' }, { pattern: '9\\x' }, { pattern: '9..X' }, { pattern: '[2-9' }, { pattern: '[]' }, { pattern: '[a]' }, { pattern: '[9-2]' }, { pattern: '[^0-9]' }, { pattern: '?' }, { pattern: 'Q' }, { pattern: '.' },
+      { pattern: 'XXXX', dialed: '' }, { pattern: 'XXXX', dialed: 'ab' }, { pattern: 'XXXX', dialed: '1234', mask: 'Q' }, { pattern: 'XXXX', dialed: '1234', prefix: 'Q' }, { pattern: 'XXXX', dialed: '1234', strip: -1 }, { pattern: 'XXXX', dialed: '1234', discard: 'predot' },
+      { pattern: '9.[2-9]XXXXXXXXX', dialed: '914085551234' }, { pattern: '9.[2-9]XXXXXXXXX', dialed: '9408' }, { pattern: 'XX', dialed: '1' }, { pattern: 'XX', dialed: '123' },
+      { pattern: '9.!#', dialed: '9123#', discard: 'predot-trailing', strip: 1, mask: '0XXX', prefix: '00' }, { pattern: '5X?', dialed: '5' }, { pattern: '1+', dialed: '11', discard: 'trailing' },
+    ]) {
+      const r = testPattern(o);
+      collect(r);
+      if (r.tokens) collect(r.tokens.map((x) => x.meaning));
+      if (r.steps) collect(r.steps);
+    }
+    for (const b of ['2g4', 'unii1', 'unii2a', 'unii2a-notpc', 'unii2c', 'unii2c-notpc', 'srd58', 'lpi6', 'vlp6']) collect(bandCheck(25, b).band);
+    collect(trn('sip.countErr', 1));
+    collect(tr('app.visits', { n: 3 }));
+
+    assert.ok(outputs.length > 300, `uscite controllate: ${outputs.length}`);
+    const offenders = [...new Set(outputs.filter((o) => italianIn(o)).map((o) => `"${italianIn(o)}" in ${o}`))];
+    assert.deepEqual(offenders, []);
+    // controllo a campione che la lingua sia davvero cambiata
+    assert.equal(calc('').error, 'Enter an IP address.');
+    assert.equal(parseSip(SIP_EXAMPLES.anomalie).issues[0].message, 'The mandatory Max-Forwards header is missing.');
+    assert.equal(formatRate(87.2), '87.2 kbps');
+  } finally {
+    setLang('it');
+  }
+  assert.equal(calc('').error, 'Inserisci un indirizzo IP.', 'ritorno all’italiano');
 });
 
 console.log(`\n${passed} superati, ${failed} falliti`);

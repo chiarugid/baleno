@@ -5,7 +5,8 @@
 import { h, fmtInt, kvList, badge, uid } from '../ui/dom.js';
 import { dashlet } from '../ui/dashlet.js';
 import { dataTable } from '../ui/table.js';
-import { parseIPv4, ipv4Type, parseIPv6, ipv6Type } from './subnet.js';
+import { parseIPv4, ipv4Type, ipv4TypeId, parseIPv6, ipv6Type, ipv6TypeId } from './subnet.js';
+import { t, tn } from '../i18n.js';
 import { Q850, SIP_CODES } from '../../data/sip-codes.js';
 
 // ---------------------------------------------------------------- Dati di riferimento
@@ -32,7 +33,6 @@ const METHODS = ['INVITE', 'ACK', 'BYE', 'CANCEL', 'OPTIONS', 'REGISTER', 'PRACK
 // Header che possono comparire una sola volta.
 const SINGLE = ['to', 'from', 'call-id', 'cseq', 'max-forwards', 'content-length', 'content-type', 'expires'];
 
-const STATUS_CLASS = { 1: 'Provvisoria', 2: 'Successo', 3: 'Redirezione', 4: 'Errore del client', 5: 'Errore del server', 6: 'Errore globale' };
 
 // Payload type statici (RFC 3551).
 const STATIC_PT = {
@@ -48,7 +48,7 @@ const STATIC_PT = {
 const IN_DIALOG = ['ACK', 'BYE', 'PRACK', 'UPDATE', 'INFO', 'NOTIFY'];
 
 const DIRECTIONS = ['sendrecv', 'sendonly', 'recvonly', 'inactive'];
-const DIRECTION_LABEL = { sendrecv: 'sendrecv (bidirezionale)', sendonly: 'sendonly (solo invio)', recvonly: 'recvonly (solo ricezione)', inactive: 'inactive (nessun flusso)' };
+const directionLabel = (dir) => (DIRECTIONS.includes(dir) ? t(`sip.dir.${dir}`) : dir);
 
 // ---------------------------------------------------------------- Funzioni di supporto
 
@@ -59,21 +59,28 @@ const lc = (kind) => kind
   .replace(/ \((.+)\)$/, ', $1');
 const byteLength = (s) => utf8.encode(s).length;
 
-// Tipo di indirizzo "non pubblico" (privato, CGNAT, link-local, loopback, ULA) o null.
-export function nonPublicKind(address) {
+// Indirizzo "non pubblico" (privato, CGNAT, link-local, loopback, ULA, non specificato):
+// { label, unspecified } oppure null. La logica usa gli identificativi, non le etichette.
+const NON_PUBLIC_V4 = ['private', 'cgnat', 'linkLocal4', 'loopback'];
+const NON_PUBLIC_V6 = ['ula', 'linkLocal', 'loopback'];
+
+export function nonPublicInfo(address) {
   const v4 = parseIPv4(address);
   if (v4 != null) {
-    if (v4 === 0) return 'Non specificato (0.0.0.0)';
-    const type = ipv4Type(v4);
-    return /Privato|CGNAT|Link-local|Loopback/.test(type) ? type : null;
+    if (v4 === 0) return { label: t('sip.unspecified4'), unspecified: true };
+    return NON_PUBLIC_V4.includes(ipv4TypeId(v4)) ? { label: ipv4Type(v4), unspecified: false } : null;
   }
   const v6 = parseIPv6(address.replace(/^\[|\]$/g, ''));
   if (v6 != null) {
-    if (v6 === 0n) return 'Non specificato (::)';
-    const type = ipv6Type(v6);
-    return /Unique Local|Link-local|Loopback/.test(type) ? type : null;
+    if (v6 === 0n) return { label: t('sip.unspecified6'), unspecified: true };
+    return NON_PUBLIC_V6.includes(ipv6TypeId(v6)) ? { label: ipv6Type(v6), unspecified: false } : null;
   }
   return null;
+}
+
+// Etichetta del tipo di indirizzo non pubblico, o null.
+export function nonPublicKind(address) {
+  return nonPublicInfo(address)?.label ?? null;
 }
 
 function ipv4Literals(text) {
@@ -148,7 +155,7 @@ export function describeEvents(fmtp) {
   }
   const has = (a, b) => { for (let n = a; n <= b; n++) if (!set.has(n)) return false; return true; };
   const parts = [];
-  if (has(0, 9)) parts.push('cifre 0–9');
+  if (has(0, 9)) parts.push(t('sip.digits'));
   if (set.has(10)) parts.push('*');
   if (set.has(11)) parts.push('#');
   if (has(12, 15)) parts.push('A–D');
@@ -174,7 +181,7 @@ function parseSbc(all, add, kind) {
           }
         }
       }
-      const tag = ['rc', 'mp', 'np'].filter((t) => t in e.params).map((t) => (e.params[t] ? `${t}=${e.params[t]}` : t)).join(' ');
+      const tag = ['rc', 'mp', 'np'].filter((x) => x in e.params).map((x) => (e.params[x] ? `${x}=${e.params[x]}` : x)).join(' ');
       return { index: e.params.index ?? null, uri: base, reason, tag: tag || null };
     }),
     reason: all('Reason').flatMap(splitHeaderList).map(parseReason),
@@ -195,17 +202,17 @@ function parseSbc(all, add, kind) {
       supported: optionTag('Supported'),
       required: optionTag('Require'),
     };
-    const t = sbc.timer;
-    const minimum = t.minSe ?? 90;
-    if (t.expires == null) add('err', 'header', `Session-Expires "${se}" non numerico.`);
+    const st = sbc.timer;
+    const minimum = st.minSe ?? 90;
+    if (st.expires == null) add('err', 'header', t('sip.iss.seNotNumeric', { value: se }));
     else {
       if (!refresher) {
-        add('info', 'header', `Session-Expires ${t.expires} s senza refresher indicato${kind === 'request' ? ': lo sceglierà lo UAS nella risposta' : ''} (RFC 4028).`);
+        add('info', 'header', t('sip.iss.seNoRefresher', { n: st.expires, who: kind === 'request' ? t('sip.iss.seNoRefresherUas') : '' }));
       } else if (refresher !== 'uac' && refresher !== 'uas') {
-        add('warn', 'header', `Session-Expires: refresher "${refresher}" non valido, ammessi uac o uas.`);
+        add('warn', 'header', t('sip.iss.seBadRefresher', { value: refresher }));
       }
-      if (t.expires < minimum) {
-        add('warn', 'header', `Session-Expires ${t.expires} s inferiore a Min-SE ${minimum} s${t.minSe == null ? ' (minimo predefinito RFC 4028)' : ''}: la controparte può rispondere 422 Session Interval Too Small.`);
+      if (st.expires < minimum) {
+        add('warn', 'header', t('sip.iss.seBelowMin', { n: st.expires, min: minimum, dflt: st.minSe == null ? t('sip.iss.seBelowMinDefault') : '' }));
       }
     }
   }
@@ -236,7 +243,7 @@ export function viaNat(via) {
   const isIp = (a) => parseIPv4(a) != null || parseIPv6(a) != null;
   const evidence = [];
   if (received && isIp(received) && !nonPublicKind(received) && received !== host) evidence.push(`received=${received}`);
-  if (rport && /^\d+$/.test(rport) && Number(rport) !== sentPort) evidence.push(`rport=${rport} invece di ${sentPort}`);
+  if (rport && /^\d+$/.test(rport) && Number(rport) !== sentPort) evidence.push(t('sip.natEvidenceRport', { rport, port: sentPort }));
   return {
     detected: evidence.length > 0,
     evidence: evidence.join(', '),
@@ -257,7 +264,7 @@ function parseSdp(lines, issues, nat = { detected: false }) {
     if (!line) continue;
     const m = /^([a-z])=(.*)$/.exec(line);
     if (!m) {
-      add('warn', `Riga SDP non valida: "${line.slice(0, 60)}"`);
+      add('warn', t('sip.iss.sdpBadLine', { line: line.slice(0, 60) }));
       continue;
     }
     const [, type, value] = m;
@@ -295,7 +302,7 @@ function parseSdp(lines, issues, nat = { detected: false }) {
         else if (cur && name === 'rtpmap') {
           const rm = /^(\d+)\s+([^/\s]+)\/(\d+)(?:\/(\d+))?/.exec(val);
           if (rm) cur.rtpmap[rm[1]] = { name: rm[2], rate: Number(rm[3]), channels: rm[4] ? Number(rm[4]) : null };
-          else add('warn', `a=rtpmap non valido: "${val}"`);
+          else add('warn', t('sip.iss.sdpBadRtpmap', { value: val }));
         } else if (cur && name === 'fmtp') {
           const fm = /^(\d+)\s+(.*)$/.exec(val);
           if (fm) cur.fmtp[fm[1]] = fm[2];
@@ -310,16 +317,16 @@ function parseSdp(lines, issues, nat = { detected: false }) {
     }
   }
 
-  if (sdp.version == null) add('err', 'SDP: manca la riga obbligatoria v=.');
-  else if (sdp.version !== '0') add('warn', `SDP: versione v=${sdp.version}, atteso v=0.`);
-  if (!sdp.origin) add('err', 'SDP: manca la riga obbligatoria o= (origine).');
-  if (sdp.name == null) add('err', 'SDP: manca la riga obbligatoria s= (nome sessione).');
-  if (sdp.timing == null) add('err', 'SDP: manca la riga obbligatoria t= (tempi).');
-  if (!sdp.media.length) add('warn', 'SDP senza righe m=: nessun flusso media offerto.');
+  if (sdp.version == null) add('err', t('sip.iss.sdpNoV'));
+  else if (sdp.version !== '0') add('warn', t('sip.iss.sdpBadV', { v: sdp.version }));
+  if (!sdp.origin) add('err', t('sip.iss.sdpNoO'));
+  if (sdp.name == null) add('err', t('sip.iss.sdpNoS'));
+  if (sdp.timing == null) add('err', t('sip.iss.sdpNoT'));
+  if (!sdp.media.length) add('warn', t('sip.iss.sdpNoM'));
 
   if (sdp.origin?.address) {
-    const kind = nonPublicKind(sdp.origin.address);
-    if (kind && !kind.startsWith('Non specificato')) add('info', `o= contiene l'indirizzo ${sdp.origin.address} (${lc(kind)}): è solo informativo, ma rivela la rete interna.`);
+    const info = nonPublicInfo(sdp.origin.address);
+    if (info && !info.unspecified) add('info', t('sip.iss.sdpOrigin', { address: sdp.origin.address, kind: lc(info.label) }));
   }
 
   sdp.media.forEach((media, i) => {
@@ -337,46 +344,46 @@ function parseSdp(lines, issues, nat = { detected: false }) {
         rate: map?.rate ?? fixed?.[1] ?? null,
         channels: map?.channels ?? fixed?.[2] ?? null,
         fmtp: media.fmtp[pt] ?? null,
-        source: map ? 'rtpmap' : fixed ? 'statico' : null,
+        source: map ? 'rtpmap' : fixed ? 'static' : null,
       };
     });
 
     const te = media.codecs.find((c) => /^telephone-event$/i.test(c.name ?? ''));
     media.telephoneEvent = te ? { pt: te.pt, rate: te.rate, events: te.fmtp, description: describeEvents(te.fmtp ?? '0-15') } : null;
     if (te && te.source === 'rtpmap' && !te.fmtp) {
-      add('info', `${label}: telephone-event (PT ${te.pt}) senza a=fmtp: per RFC 4733 si assumono gli eventi DTMF 0-15.`);
+      add('info', t('sip.iss.teNoFmtp', { label, pt: te.pt }));
     }
 
     const isRtp = /RTP\//.test(media.proto);
-    if (!media.effectiveConnection) add('err', `${label}: nessuna riga c= (né di sessione né di media), indirizzo media sconosciuto.`);
+    if (!media.effectiveConnection) add('err', t('sip.iss.noC', { label }));
     else {
       const address = media.effectiveConnection.address;
-      const kind = nonPublicKind(address);
-      if (kind?.startsWith('Non specificato')) add('info', `${label}: c=${address}, convenzione storica per la messa in attesa (hold).`);
-      else if (kind) {
-        add(nat.detected ? 'warn' : 'info', `${label}: indirizzo media ${address} non pubblico (${lc(kind)}). Attraverso un NAT l'audio può risultare assente o unidirezionale.${nat.detected ? ` NAT rilevato dal Via (${nat.evidence}).` : ''}`);
+      const info = nonPublicInfo(address);
+      if (info?.unspecified) add('info', t('sip.iss.hold', { label, address }));
+      else if (info) {
+        add(nat.detected ? 'warn' : 'info', t('sip.iss.mediaPrivate', { label, address, kind: lc(info.label), nat: nat.detected ? t('sip.natNote', { evidence: nat.evidence }) : '' }));
       }
     }
-    if (media.port === 0) add('info', `${label}: porta 0, flusso disattivato o rifiutato.`);
-    else if (!Number.isInteger(media.port) || media.port < 0 || media.port > 65535) add('err', `${label}: porta non valida.`);
-    else if (isRtp && media.port % 2 === 1 && !media.rtcpMux) add('info', `${label}: porta RTP dispari (${media.port}); senza rtcp-mux, per convenzione RTP usa porte pari.`);
+    if (media.port === 0) add('info', t('sip.iss.port0', { label }));
+    else if (!Number.isInteger(media.port) || media.port < 0 || media.port > 65535) add('err', t('sip.iss.badPort', { label }));
+    else if (isRtp && media.port % 2 === 1 && !media.rtcpMux) add('info', t('sip.iss.oddPort', { label, port: media.port }));
 
     if (isRtp) {
       for (const codec of media.codecs) {
         const n = Number(codec.pt);
-        if (!codec.source && n >= 96 && n <= 127) add('err', `${label}: payload type dinamico ${codec.pt} senza a=rtpmap.`);
-        else if (!codec.source) add('warn', `${label}: payload type ${codec.pt} sconosciuto e senza a=rtpmap.`);
+        if (!codec.source && n >= 96 && n <= 127) add('err', t('sip.iss.dynNoRtpmap', { label, pt: codec.pt }));
+        else if (!codec.source) add('warn', t('sip.iss.unknownPt', { label, pt: codec.pt }));
       }
       for (const pt of Object.keys(media.rtpmap)) {
-        if (!media.formats.includes(pt)) add('warn', `${label}: a=rtpmap per il payload ${pt}, che non compare nella riga m=.`);
+        if (!media.formats.includes(pt)) add('warn', t('sip.iss.rtpmapNotInM', { label, pt }));
       }
       const secure = /SAVP/.test(media.proto);
       // Chiavi SRTP: SDES (a=crypto) oppure DTLS-SRTP (a=fingerprint, di sessione o di media).
-      if (secure && !media.crypto.length && !media.effectiveFingerprint) add('warn', `${label}: profilo ${media.proto} (SRTP) senza a=crypto né a=fingerprint: chiavi non negoziate.`);
-      if (!secure && media.crypto.length) add('info', `${label}: a=crypto presente ma profilo ${media.proto} non sicuro; la cifratura verrà ignorata.`);
+      if (secure && !media.crypto.length && !media.effectiveFingerprint) add('warn', t('sip.iss.savpNoKeys', { label, proto: media.proto }));
+      if (!secure && media.crypto.length) add('info', t('sip.iss.cryptoIgnored', { label, proto: media.proto }));
     }
     if (media.effectiveDirection !== 'sendrecv' && media.port !== 0) {
-      add('info', `${label}: direzione ${media.effectiveDirection}${media.effectiveDirection === 'sendonly' || media.effectiveDirection === 'inactive' ? ' (tipico della messa in attesa)' : ''}.`);
+      add('info', t('sip.iss.direction', { label, dir: media.effectiveDirection, hold: media.effectiveDirection === 'sendonly' || media.effectiveDirection === 'inactive' ? t('sip.iss.directionHold') : '' }));
     }
   });
 
@@ -396,11 +403,11 @@ export function parseSip(text) {
   if (start < 0) {
     const first = lines.find((l) => l.trim());
     if (!first) return { ok: false, empty: true, issues: [] };
-    add('err', 'start', 'Start line non riconosciuta: attesa "METODO URI SIP/2.0" oppure "SIP/2.0 codice motivo".');
+    add('err', 'start', t('sip.iss.badStart'));
     return { ok: false, issues };
   }
   const skipped = lines.slice(0, start).filter((l) => l.trim()).length;
-  if (skipped) add('info', 'start', `Ignorate ${skipped} righe prima della start line (es. intestazioni di log).`);
+  if (skipped) add('info', 'start', t('sip.iss.skipped', { n: skipped }));
 
   const m = startRe.exec(lines[start].trim());
   const msg = { ok: true, issues, headers: [], body: '', bodyBytes: 0, sdp: null, startLine: lines[start].trim() };
@@ -410,18 +417,19 @@ export function parseSip(text) {
     msg.uri = m[2];
     msg.version = m[3];
     if (!METHODS.includes(msg.method)) {
-      add(msg.method === msg.method.toUpperCase() ? 'warn' : 'err', 'start', `Metodo "${msg.method}" non standard${msg.method === msg.method.toUpperCase() ? '' : ' (i metodi sono case-sensitive e maiuscoli)'}.`);
+      add(msg.method === msg.method.toUpperCase() ? 'warn' : 'err', 'start', t('sip.iss.method', { method: msg.method, case: msg.method === msg.method.toUpperCase() ? '' : t('sip.iss.methodCase') }));
     }
-    if (!/^(sips?|tel):/i.test(msg.uri)) add('warn', 'start', `Request-URI "${msg.uri}" senza schema sip:, sips: o tel:.`);
+    if (!/^(sips?|tel):/i.test(msg.uri)) add('warn', 'start', t('sip.iss.requestUri', { uri: msg.uri }));
   } else {
     msg.kind = 'response';
     msg.version = m[4];
     msg.status = Number(m[5]);
     msg.reason = (m[6] ?? '').trim();
-    msg.statusClass = STATUS_CLASS[Math.floor(msg.status / 100)] ?? null;
-    if (msg.status < 100 || msg.status > 699) add('err', 'start', `Codice di stato ${msg.status} fuori dall'intervallo 100–699.`);
+    const digit = Math.floor(msg.status / 100);
+    msg.statusClass = digit >= 1 && digit <= 6 ? t(`sipclass.${digit}`) : null;
+    if (msg.status < 100 || msg.status > 699) add('err', 'start', t('sip.iss.statusRange', { code: msg.status }));
   }
-  if (msg.version !== 'SIP/2.0') add('err', 'start', `Versione "${msg.version}", attesa SIP/2.0.`);
+  if (msg.version !== 'SIP/2.0') add('err', 'start', t('sip.iss.version', { version: msg.version }));
 
   // Header (con continuazioni su più righe) fino alla riga vuota.
   let i = start + 1;
@@ -434,7 +442,7 @@ export function parseSip(text) {
     }
     const colon = line.indexOf(':');
     if (colon <= 0) {
-      add('err', 'header', `Riga di header senza ":" — "${line.trim().slice(0, 60)}".`);
+      add('err', 'header', t('sip.iss.headerNoColon', { line: line.trim().slice(0, 60) }));
       continue;
     }
     const name = line.slice(0, colon).trim();
@@ -464,66 +472,66 @@ export function parseSip(text) {
   const required = ['To', 'From', 'CSeq', 'Call-ID', 'Via'];
   if (msg.kind === 'request') required.push('Max-Forwards');
   if (msg.kind === 'request' && msg.method === 'INVITE') required.push('Contact');
-  for (const name of required) if (!get(name)) add('err', 'header', `Manca l'header obbligatorio ${name}.`);
+  for (const name of required) if (!get(name)) add('err', 'header', t('sip.iss.missingHeader', { name }));
 
   for (const name of SINGLE) {
     const count = all(name).length;
-    if (count > 1) add('warn', 'header', `Header ${CANONICAL[name] ?? name} ripetuto ${count} volte.`);
+    if (count > 1) add('warn', 'header', t('sip.iss.repeated', { name: CANONICAL[name] ?? name, n: count }));
   }
-  for (const hd of msg.headers) if (!hd.value) add('warn', 'header', `Header ${hd.canonical} vuoto.`);
+  for (const hd of msg.headers) if (!hd.value) add('warn', 'header', t('sip.iss.emptyHeader', { name: hd.canonical }));
 
   const cseq = get('CSeq');
   if (cseq) {
     const cm = /^(\d+)\s+([A-Za-z]+)$/.exec(cseq);
-    if (!cm) add('err', 'header', `CSeq "${cseq}" non valido: atteso "numero METODO".`);
+    if (!cm) add('err', 'header', t('sip.iss.cseqInvalid', { value: cseq }));
     else {
       msg.cseqNumber = Number(cm[1]);
       msg.cseqMethod = cm[2];
-      if (msg.kind === 'request' && cm[2] !== msg.method) add('err', 'header', `Il metodo in CSeq (${cm[2]}) non coincide con quello della richiesta (${msg.method}).`);
-      if (msg.cseqNumber >= 2 ** 31) add('err', 'header', 'Il numero di CSeq deve essere inferiore a 2^31.');
+      if (msg.kind === 'request' && cm[2] !== msg.method) add('err', 'header', t('sip.iss.cseqMethod', { cseq: cm[2], method: msg.method }));
+      if (msg.cseqNumber >= 2 ** 31) add('err', 'header', t('sip.iss.cseqTooBig'));
     }
   }
 
   const maxForwards = get('Max-Forwards');
   if (maxForwards != null) {
-    if (!/^\d+$/.test(maxForwards)) add('err', 'header', `Max-Forwards "${maxForwards}" non numerico.`);
-    else if (Number(maxForwards) === 0) add('warn', 'header', 'Max-Forwards a 0: il prossimo hop risponderà 483 Too Many Hops.');
+    if (!/^\d+$/.test(maxForwards)) add('err', 'header', t('sip.iss.mfNotNumeric', { value: maxForwards }));
+    else if (Number(maxForwards) === 0) add('warn', 'header', t('sip.iss.mfZero'));
   }
 
   all('Via').forEach((via, n) => {
     const branch = headerParam(via, 'branch');
-    if (!/^SIP\/2\.0\/[A-Z]+\s+\S+/i.test(via)) add('err', 'header', `Via #${n + 1} non valido: "${via.slice(0, 60)}".`);
-    if (!branch) add('warn', 'header', `Via #${n + 1} senza parametro branch.`);
-    else if (!branch.startsWith('z9hG4bK')) add('warn', 'header', `Via #${n + 1}: branch senza il prefisso z9hG4bK (RFC 3261), transazioni RFC 2543.`);
+    if (!/^SIP\/2\.0\/[A-Z]+\s+\S+/i.test(via)) add('err', 'header', t('sip.iss.viaInvalid', { n: n + 1, value: via.slice(0, 60) }));
+    if (!branch) add('warn', 'header', t('sip.iss.viaNoBranch', { n: n + 1 }));
+    else if (!branch.startsWith('z9hG4bK')) add('warn', 'header', t('sip.iss.viaCookie', { n: n + 1 }));
   });
 
   // NAT: il Via in cima riporta received= pubblico diverso dal sent-by, o rport= diverso dalla porta.
   msg.nat = viaNat(get('Via'));
-  const natNote = msg.nat.detected ? ` NAT rilevato dal Via (${msg.nat.evidence}).` : '';
+  const natNote = msg.nat.detected ? t('sip.natNote', { evidence: msg.nat.evidence }) : '';
   const privLevel = msg.nat.detected ? 'warn' : 'info';
   if (msg.nat.sentByKind) {
-    add('info', 'header', `Via in cima con indirizzo ${msg.nat.host} (${lc(msg.nat.sentByKind)}): il mittente è in rete interna.${natNote}`);
+    add('info', 'header', t('sip.iss.viaInternal', { host: msg.nat.host, kind: lc(msg.nat.sentByKind), nat: natNote }));
   }
 
   for (const contact of all('Contact')) {
     for (const ip of ipv4Literals(contact)) {
       const kind = nonPublicKind(ip);
-      if (kind) add(privLevel, 'header', `Contact con indirizzo ${ip} non pubblico (${lc(kind)}): attraverso un NAT le richieste in-dialog e il BYE potrebbero non arrivare.${natNote}`);
+      if (kind) add(privLevel, 'header', t('sip.iss.contactPrivate', { ip, kind: lc(kind), nat: natNote }));
     }
   }
 
   const from = get('From');
-  if (from && msg.kind === 'request' && !headerParam(outsideAngle(from), 'tag')) add('warn', 'header', 'From senza parametro tag.');
+  if (from && msg.kind === 'request' && !headerParam(outsideAngle(from), 'tag')) add('warn', 'header', t('sip.iss.fromNoTag'));
   const to = get('To');
   const toTag = to ? headerParam(outsideAngle(to), 'tag') : null;
   if (to && !toTag) {
     if (msg.kind === 'response' && msg.status !== 100) {
-      add('warn', 'header', `Risposta ${msg.status} con To senza tag: lo UAS deve aggiungerlo.`);
+      add('warn', 'header', t('sip.iss.toNoTagResponse', { code: msg.status }));
     } else if (msg.kind === 'request' && msg.method === 'NOTIFY') {
       // NOTIFY fuori dialogo (es. MWI senza SUBSCRIBE) è prassi diffusa, non un errore.
-      add('info', 'header', 'NOTIFY senza tag nel To: possibile NOTIFY unsolicited (MWI), inviato fuori da una sottoscrizione.');
+      add('info', 'header', t('sip.iss.notifyNoTag'));
     } else if (msg.kind === 'request' && IN_DIALOG.includes(msg.method)) {
-      add('warn', 'header', `${msg.method} senza tag nel To: è una richiesta in-dialog e deve riportare il tag del dialogo.`);
+      add('warn', 'header', t('sip.iss.inDialogNoTag', { method: msg.method }));
     }
   }
 
@@ -537,7 +545,7 @@ export function parseSip(text) {
   // fine riga normalizzati dal browser, quindi la verifica al byte esatto non è possibile.
   if (clText != null) {
     if (!/^\d+$/.test(clText)) {
-      add('err', 'body', `Content-Length "${clText}" non numerico.`);
+      add('err', 'body', t('sip.iss.clNotNumeric', { value: clText }));
       msg.contentLengthCheck = { status: 'invalid', computed: msg.bodyBytes };
     } else {
       const declared = Number(clText);
@@ -550,25 +558,25 @@ export function parseSip(text) {
         // posto di CRLF è pari al numero di righe del corpo.
         const gap = msg.bodyBytes - declared;
         const hint = gap > 0 && (gap === 2 || gap === bodyLines.length)
-          ? ' Potrebbe mancare un fine riga nel corpo originale (CRLF finale assente o LF al posto di CRLF).'
-          : gap < 0 ? ' Il corpo è più corto del dichiarato: un’ipotesi è che il messaggio sia troncato.' : '';
-        add('warn', 'body', `Content-Length non corrisponde (atteso ${declared}, calcolato ${msg.bodyBytes}).${hint}`);
+          ? t('sip.iss.clHintLineEnd')
+          : gap < 0 ? t('sip.iss.clHintShort') : '';
+        add('warn', 'body', t('sip.iss.clMismatch', { declared, computed: msg.bodyBytes, hint }));
       }
     }
   } else if (bodyLines.length) {
     msg.contentLengthCheck = { status: 'missing', computed: msg.bodyBytes };
-    add('warn', 'body', 'Corpo presente senza Content-Length (obbligatorio su TCP/TLS).');
+    add('warn', 'body', t('sip.iss.clMissing'));
   }
-  if (bodyLines.length && !contentType) add('err', 'body', 'Corpo presente senza Content-Type.');
-  if (!bodyLines.length && contentType && /sdp/i.test(contentType)) add('warn', 'body', 'Content-Type application/sdp ma il corpo è vuoto.');
+  if (bodyLines.length && !contentType) add('err', 'body', t('sip.iss.noContentType'));
+  if (!bodyLines.length && contentType && /sdp/i.test(contentType)) add('warn', 'body', t('sip.iss.sdpEmpty'));
 
   const looksSdp = bodyLines[0]?.trim().startsWith('v=');
   if (bodyLines.length && (/application\/sdp/i.test(contentType ?? '') || looksSdp)) {
-    if (looksSdp && contentType && !/application\/sdp/i.test(contentType)) add('warn', 'body', `Il corpo sembra SDP ma Content-Type è "${contentType}".`);
+    if (looksSdp && contentType && !/application\/sdp/i.test(contentType)) add('warn', 'body', t('sip.iss.looksSdp', { type: contentType }));
     msg.sdp = parseSdp(bodyLines, issues, msg.nat);
   }
   if (msg.kind === 'request' && msg.method === 'INVITE' && !bodyLines.length) {
-    add('info', 'body', 'INVITE senza SDP: offerta tardiva (delayed offer), l\'SDP arriverà nel 200 OK.');
+    add('info', 'body', t('sip.iss.delayedOffer'));
   }
 
   return msg;
@@ -696,7 +704,7 @@ Content-Length: 0`,
 
   anomalie: `INVITE sip:200@pbx.example.com SIP/2.0
 Via: SIP/2.0/UDP 192.168.1.50:5060;branch=1234abcd
-From: "Interno 101" <sip:101@pbx.example.com>
+From: "Ext 101" <sip:101@pbx.example.com>
 To: <sip:200@pbx.example.com>
 Call-ID: a84b4c76e66710@192.168.1.50
 CSeq: 102 BYE
@@ -716,7 +724,7 @@ a=sendonly`,
 
 // ---------------------------------------------------------------- Interfaccia
 
-const LEVEL = { err: ['Errore', 'err'], warn: ['Attenzione', 'warn'], info: ['Info', 'info'] };
+const LEVEL = { err: ['sip.levelErr', 'err'], warn: ['sip.levelWarn', 'warn'], info: ['sip.levelInfo', 'info'] };
 
 function plainTable(head, rows) {
   return h('div', { class: 'table-wrap' }, h('table', { class: 'table table--plain' },
@@ -729,59 +737,59 @@ function summaryView(msg) {
   const media = msg.sdp?.media ?? [];
   const kindText = msg.kind === 'request' ? msg.method : `${msg.status} ${msg.reason}`.trim();
   const kpis = h('div', { class: 'kpis' },
-    h('div', { class: 'kpi kpi--hl' }, h('div', { class: 'kpi__label' }, msg.kind === 'request' ? 'Richiesta' : 'Risposta'), h('div', { class: 'kpi__value' }, kindText)),
-    h('div', { class: 'kpi' }, h('div', { class: 'kpi__label' }, 'Header'), h('div', { class: 'kpi__value' }, fmtInt(msg.headers.length))),
-    h('div', { class: 'kpi' }, h('div', { class: 'kpi__label' }, 'Flussi media'), h('div', { class: 'kpi__value' }, fmtInt(media.length))),
-    h('div', { class: 'kpi' }, h('div', { class: 'kpi__label' }, 'Anomalie'), h('div', { class: 'kpi__value' }, fmtInt(counts.err + counts.warn),
-      h('small', null, counts.err ? `${counts.err} err.` : counts.warn ? `${counts.warn} avv.` : 'ok'))));
+    h('div', { class: 'kpi kpi--hl' }, h('div', { class: 'kpi__label' }, msg.kind === 'request' ? t('sip.request') : t('sip.response')), h('div', { class: 'kpi__value' }, kindText)),
+    h('div', { class: 'kpi' }, h('div', { class: 'kpi__label' }, t('sip.headers')), h('div', { class: 'kpi__value' }, fmtInt(msg.headers.length))),
+    h('div', { class: 'kpi' }, h('div', { class: 'kpi__label' }, t('sip.mediaStreams')), h('div', { class: 'kpi__value' }, fmtInt(media.length))),
+    h('div', { class: 'kpi' }, h('div', { class: 'kpi__label' }, t('sip.anomalies')), h('div', { class: 'kpi__value' }, fmtInt(counts.err + counts.warn),
+      h('small', null, counts.err ? t('sip.errShort', { n: counts.err }) : counts.warn ? t('sip.warnShort', { n: counts.warn }) : 'ok'))));
 
   const items = msg.kind === 'request'
     ? [
-      { label: 'Metodo', value: msg.method, hl: true },
+      { label: t('sip.method'), value: msg.method, hl: true },
       { label: 'Request-URI', value: msg.uri },
-      { label: 'Versione', value: msg.version },
+      { label: t('sip.version'), value: msg.version },
     ]
     : [
-      { label: 'Codice', value: [String(msg.status), msg.statusClass ? h('span', { class: 'sub' }, msg.statusClass) : null], hl: true },
-      { label: 'Motivo', value: msg.reason || '—' },
-      { label: 'Versione', value: msg.version },
+      { label: t('sip.code'), value: [String(msg.status), msg.statusClass ? h('span', { class: 'sub' }, msg.statusClass) : null], hl: true },
+      { label: t('sip.reason'), value: msg.reason || '—' },
+      { label: t('sip.version'), value: msg.version },
     ];
   for (const name of ['Call-ID', 'From', 'To', 'CSeq', 'User-Agent', 'Server']) {
     const value = msg.get(name);
     if (value) items.push({ label: name, value });
   }
-  if (msg.body) items.push({ label: 'Corpo', value: `${fmtInt(msg.bodyBytes)} byte${msg.get('Content-Type') ? ` · ${msg.get('Content-Type')}` : ''}` });
+  if (msg.body) items.push({ label: t('sip.body'), value: t('sip.bodyValue', { n: fmtInt(msg.bodyBytes), type: msg.get('Content-Type') ? ` · ${msg.get('Content-Type')}` : '' }) });
   const cl = msg.contentLengthCheck;
   if (cl) items.push({ label: 'Content-Length', value: contentLengthValue(cl) });
   const nodes = [kpis, kvList(items)];
   if (cl) {
     nodes.push(h('ul', { class: 'notes' }, h('li', { class: 'note' },
-      'La verifica esatta al byte non è possibile dal testo incollato, perché il browser normalizza i fine riga: il conteggio assume CRLF (come sul cavo) dopo ogni riga del corpo.')));
+      t('sip.clNote'))));
   }
   return nodes;
 }
 
 function contentLengthValue(cl) {
   switch (cl.status) {
-    case 'verified': return [`${fmtInt(cl.declared)} byte `, badge('verificato', 'ok')];
-    case 'mismatch': return [`atteso ${fmtInt(cl.declared)}, calcolato ${fmtInt(cl.computed)} `, badge('non corrisponde', 'warn')];
-    case 'missing': return [`assente, corpo di ${fmtInt(cl.computed)} byte `, badge('mancante', 'warn')];
-    default: return [badge('non numerico', 'err')];
+    case 'verified': return [t('sip.clBytes', { n: fmtInt(cl.declared) }), badge(t('sip.verified'), 'ok')];
+    case 'mismatch': return [t('sip.clExpected', { declared: fmtInt(cl.declared), computed: fmtInt(cl.computed) }), badge(t('sip.notMatching'), 'warn')];
+    case 'missing': return [t('sip.clAbsent', { n: fmtInt(cl.computed) }), badge(t('sip.missing'), 'warn')];
+    default: return [badge(t('sip.notNumeric'), 'err')];
   }
 }
 
 function issuesView(issues) {
-  if (!issues.length) return [h('p', { class: 'empty' }, badge('Nessuna anomalia rilevata', 'ok'))];
+  if (!issues.length) return [h('p', { class: 'empty' }, badge(t('sip.noAnomalies'), 'ok'))];
   const order = { err: 0, warn: 1, info: 2 };
   const sorted = [...issues].sort((a, b) => order[a.level] - order[b.level]);
   return [h('ul', { class: 'notes notes--flush' }, sorted.map((it) => h('li', { class: `note note--${it.level}` },
-    badge(LEVEL[it.level][0], LEVEL[it.level][1]), ' ', it.message)))];
+    badge(t(LEVEL[it.level][0]), LEVEL[it.level][1]), ' ', it.message)))];
 }
 
 function dtmfValue(te) {
   const events = te.events
-    ? `eventi ${te.events}${te.description ? ` (${te.description})` : ''}`
-    : `fmtp assente: 0-15 implicito (${describeEvents('0-15')})`;
+    ? t('sip.dtmfEvents', { events: te.events, desc: te.description ? ` (${te.description})` : '' })
+    : t('sip.dtmfImplicit', { desc: describeEvents('0-15') });
   return [`PT ${te.pt}${te.rate ? ` · ${fmtInt(te.rate)} Hz` : ''} · `, h('span', { class: 'sans' }, events)];
 }
 
@@ -792,36 +800,36 @@ function identityText(e) {
 function sbcView(sbc) {
   const nodes = [];
   if (sbc.pai.length || sbc.ppi.length) {
-    nodes.push(h('h3', { class: 'section-title' }, 'Identità (RFC 3325)'), kvList([
+    nodes.push(h('h3', { class: 'section-title' }, t('sip.identity')), kvList([
       sbc.pai.length ? { label: 'P-Asserted-Identity', value: sbc.pai.map((e, i) => [i ? h('br') : null, identityText(e)]), hl: true } : null,
       sbc.ppi.length ? { label: 'P-Preferred-Identity', value: sbc.ppi.map((e, i) => [i ? h('br') : null, identityText(e)]) } : null,
     ], 'kv--compact'));
   }
   if (sbc.diversion.length) {
     nodes.push(h('h3', { class: 'section-title' }, 'Diversion (RFC 5806)'), plainTable(
-      [{ label: '#', num: true }, { label: 'Deviato da', mono: true }, { label: 'Motivo' }, { label: 'Contatore', num: true }, { label: 'Privacy' }],
+      [{ label: '#', num: true }, { label: t('sip.divertedFrom'), mono: true }, { label: t('sip.reason') }, { label: t('sip.counter'), num: true }, { label: 'Privacy' }],
       sbc.diversion.map((d) => [String(d.index), identityText(d), d.reason ?? '—', d.counter ?? '—', d.privacy ?? '—']),
     ));
   }
   if (sbc.historyInfo.length) {
     nodes.push(h('h3', { class: 'section-title' }, 'History-Info (RFC 7044)'), plainTable(
-      [{ label: 'Indice', mono: true }, { label: 'Destinazione', mono: true }, { label: 'Causa' }, { label: 'Tag', mono: true }],
+      [{ label: t('sip.index'), mono: true }, { label: t('sip.destination'), mono: true }, { label: t('sip.cause') }, { label: 'Tag', mono: true }],
       sbc.historyInfo.map((e) => [e.index ?? '—', e.uri, e.reason ? reasonText(e.reason) : '—', e.tag ?? '—']),
     ));
   }
   if (sbc.reason.length) {
     nodes.push(h('h3', { class: 'section-title' }, 'Reason (RFC 3326)'), plainTable(
-      [{ label: 'Protocollo' }, { label: 'Causa', num: true, mono: true }, { label: 'Significato' }, { label: 'Testo' }],
+      [{ label: t('sip.protocol') }, { label: t('sip.cause'), num: true, mono: true }, { label: t('sip.meaning') }, { label: t('sip.text') }],
       sbc.reason.map((r) => [r.protocol, r.cause == null ? '—' : String(r.cause), r.meaning ?? '—', r.text ?? '—']),
     ));
   }
   if (sbc.timer) {
-    const t = sbc.timer;
+    const st = sbc.timer;
     nodes.push(h('h3', { class: 'section-title' }, 'Session timer (RFC 4028)'), kvList([
-      { label: 'Session-Expires', value: t.expires == null ? badge('non valido', 'err') : `${fmtInt(t.expires)} s (${fmtInt(Math.round(t.expires / 60))} min)`, hl: true },
-      { label: 'Refresher', value: t.refresher ?? h('span', { class: 'sans muted' }, 'non indicato') },
-      { label: 'Min-SE', value: t.minSe == null ? h('span', { class: 'sans muted' }, 'assente (minimo predefinito 90 s)') : `${fmtInt(t.minSe)} s` },
-      { label: 'Option tag timer', value: [t.supported ? 'Supported' : null, t.required ? 'Require' : null].filter(Boolean).join(' e ') || h('span', { class: 'sans muted' }, 'non presente') },
+      { label: 'Session-Expires', value: st.expires == null ? badge(t('sip.invalid'), 'err') : `${fmtInt(st.expires)} s (${fmtInt(Math.round(st.expires / 60))} min)`, hl: true },
+      { label: 'Refresher', value: st.refresher ?? h('span', { class: 'sans muted' }, t('sip.notGiven')) },
+      { label: 'Min-SE', value: st.minSe == null ? h('span', { class: 'sans muted' }, t('sip.minSeAbsent')) : `${fmtInt(st.minSe)} s` },
+      { label: t('sip.optionTag'), value: [st.supported ? 'Supported' : null, st.required ? 'Require' : null].filter(Boolean).join(t('sip.and')) || h('span', { class: 'sans muted' }, t('sip.notPresent')) },
     ], 'kv--compact'));
   }
   return nodes;
@@ -833,31 +841,31 @@ function reasonText(r) {
 
 function sdpView(sdp, nat) {
   const nodes = [kvList([
-    sdp.origin ? { label: 'Origine (o=)', value: `${sdp.origin.username} · ${sdp.origin.address ?? '—'}` } : null,
-    { label: 'Sessione (s=)', value: sdp.name ?? '—' },
-    { label: 'Connessione (c=)', value: sdp.connection ? `${sdp.connection.addrType} ${sdp.connection.address}` : '— (solo a livello media)' },
-    sdp.direction ? { label: 'Direzione di sessione', value: DIRECTION_LABEL[sdp.direction] } : null,
+    sdp.origin ? { label: t('sip.origin'), value: `${sdp.origin.username} · ${sdp.origin.address ?? '—'}` } : null,
+    { label: t('sip.session'), value: sdp.name ?? '—' },
+    { label: t('sip.connection'), value: sdp.connection ? `${sdp.connection.addrType} ${sdp.connection.address}` : t('sip.connectionMediaOnly') },
+    sdp.direction ? { label: t('sip.sessionDirection'), value: directionLabel(sdp.direction) } : null,
   ])];
 
   sdp.media.forEach((media, i) => {
     const conn = media.effectiveConnection;
-    const kind = conn ? nonPublicKind(conn.address) : null;
+    const info = conn ? nonPublicInfo(conn.address) : null;
     nodes.push(
-      h('h3', { class: 'section-title' }, `Flusso ${i + 1} · ${media.type}`),
+      h('h3', { class: 'section-title' }, t('sip.stream', { n: i + 1, type: media.type })),
       kvList([
-        { label: 'Indirizzo media', value: [conn ? conn.address : '—', kind ? h('span', { class: 'sub' }, badge(kind.startsWith('Non specificato') ? 'hold' : 'non pubblico', kind.startsWith('Non specificato') || !nat.detected ? 'info' : 'warn')) : null], hl: true },
-        { label: 'Porta RTP', value: media.port === 0 ? '0 (disattivato)' : String(media.port), hl: true },
+        { label: t('sip.mediaAddress'), value: [conn ? conn.address : '—', info ? h('span', { class: 'sub' }, badge(info.unspecified ? t('sip.hold') : t('sip.nonPublic'), info.unspecified || !nat.detected ? 'info' : 'warn')) : null], hl: true },
+        { label: t('sip.rtpPort'), value: media.port === 0 ? t('sip.portDisabled') : String(media.port), hl: true },
         media.rtcp ? { label: 'RTCP', value: media.rtcp } : null,
-        { label: 'Protocollo', value: [media.proto, /SAVP/.test(media.proto) ? h('span', { class: 'sub' }, badge(media.crypto.length ? 'SRTP SDES' : media.effectiveFingerprint ? 'SRTP DTLS' : 'SRTP senza chiavi', media.crypto.length || media.effectiveFingerprint ? 'ok' : 'warn')) : null] },
-        { label: 'Direzione', value: DIRECTION_LABEL[media.effectiveDirection] ?? media.effectiveDirection },
+        { label: t('sip.protocol'), value: [media.proto, /SAVP/.test(media.proto) ? h('span', { class: 'sub' }, badge(media.crypto.length ? 'SRTP SDES' : media.effectiveFingerprint ? 'SRTP DTLS' : t('sip.srtpNoKeys'), media.crypto.length || media.effectiveFingerprint ? 'ok' : 'warn')) : null] },
+        { label: t('sip.direction'), value: directionLabel(media.effectiveDirection) },
         media.ptime ? { label: 'ptime', value: `${media.ptime} ms${media.maxptime ? ` (max ${media.maxptime} ms)` : ''}` } : null,
         media.telephoneEvent ? { label: 'DTMF (RFC 4733)', value: dtmfValue(media.telephoneEvent) } : null,
       ], 'kv--compact'),
     );
     if (media.codecs.length) {
       nodes.push(plainTable(
-        [{ label: 'PT', num: true, mono: true }, { label: 'Codec' }, { label: 'Clock (Hz)', num: true, mono: true }, { label: 'Origine' }, { label: 'fmtp', mono: true }],
-        media.codecs.map((c) => [c.pt, c.name ?? badge('sconosciuto', 'err'), c.rate ? fmtInt(c.rate) : '—', c.source ?? '—', c.fmtp ?? '']),
+        [{ label: 'PT', num: true, mono: true }, { label: 'Codec' }, { label: t('sip.clock'), num: true, mono: true }, { label: t('sip.source') }, { label: 'fmtp', mono: true }],
+        media.codecs.map((c) => [c.pt, c.name ?? badge(t('sip.unknown'), 'err'), c.rate ? fmtInt(c.rate) : '—', c.source === 'static' ? t('sip.sourceStatic') : c.source ?? '—', c.fmtp ?? '']),
       ));
     }
   });
@@ -868,37 +876,37 @@ export function render(container, params, ctx) {
   const inputId = uid('sip');
   const textarea = h('textarea', {
     id: inputId, class: 'input input--mono textarea textarea--code', rows: 22, wrap: 'off', spellcheck: 'false',
-    autocomplete: 'off', autocapitalize: 'off', placeholder: 'Incolla qui un messaggio SIP (request o risposta, con eventuale SDP)…',
+    autocomplete: 'off', autocapitalize: 'off', placeholder: t('sip.placeholder'),
   });
-  const exampleButtons = [['INVITE con SDP', 'invite'], ['200 OK', 'ok200'], ['REGISTER', 'register'], ['INVITE da SBC', 'sbc'], ['BYE con Reason', 'bye'], ['Con anomalie', 'anomalie']]
-    .map(([label, key]) => h('button', { type: 'button', class: 'chip', onclick: () => { textarea.value = EXAMPLES[key]; ctx.setParams({ esempio: key }); update(); } }, label));
+  const exampleButtons = [[t('sip.exInvite'), 'invite'], ['200 OK', 'ok200'], ['REGISTER', 'register'], [t('sip.exSbc'), 'sbc'], [t('sip.exBye'), 'bye'], [t('sip.exAnomalies'), 'anomalie']]
+    .map(([label, key]) => h('button', { type: 'button', class: 'chip', onclick: () => { textarea.value = EXAMPLES[key]; lastText = null; ctx.setParams({ esempio: key }); update(); } }, label));
 
-  const clear = () => { textarea.value = ''; update(); textarea.focus(); };
-  const inputDl = dashlet({ title: 'Messaggio SIP', expandable: false, onReset: clear });
+  const clear = () => { textarea.value = ''; lastText = ''; update(); textarea.focus(); };
+  const inputDl = dashlet({ title: t('sip.messageTitle'), expandable: false, onReset: clear });
   inputDl.body.append(
     h('div', { class: 'field' },
-      h('label', { for: inputId }, 'Testo del messaggio'),
+      h('label', { for: inputId }, t('sip.messageText')),
       textarea,
-      h('span', { class: 'field__hint' }, 'L’analisi avviene mentre scrivi. Il testo resta nel browser e non viene salvato nell’indirizzo della pagina.')),
-    h('div', { class: 'examples' }, h('span', { class: 'examples__label' }, 'Esempi'), exampleButtons),
-    h('div', { class: 'form-actions' }, h('button', { type: 'button', class: 'btn btn--secondary', onclick: clear }, 'Reset')));
+      h('span', { class: 'field__hint' }, t('sip.messageHint'))),
+    h('div', { class: 'examples' }, h('span', { class: 'examples__label' }, t('ui.examples')), exampleButtons),
+    h('div', { class: 'form-actions' }, h('button', { type: 'button', class: 'btn btn--secondary', onclick: clear }, t('ui.resetBtn'))));
 
-  const summaryDl = dashlet({ title: 'Riepilogo' });
-  const issuesDl = dashlet({ title: 'Anomalie' });
+  const summaryDl = dashlet({ title: t('sip.summary') });
+  const issuesDl = dashlet({ title: t('sip.anomalies') });
   const headersTable = dataTable({
     columns: [
       { key: 'index', label: '#', align: 'right' },
       { key: 'canonical', label: 'Header', format: (r) => (r.compact ? `${r.canonical} (${r.name})` : r.name) },
-      { key: 'value', label: 'Valore', mono: true, wrap: true },
+      { key: 'value', label: t('sip.colValue'), mono: true, wrap: true },
     ],
     pageSize: 25,
-    filterPlaceholder: 'Filtra header…',
-    emptyText: 'Nessun header',
+    filterPlaceholder: t('sip.filterHeaders'),
+    emptyText: t('sip.noHeaders'),
   });
-  const headersDl = dashlet({ title: 'Header', className: 'span-all', flush: true });
+  const headersDl = dashlet({ title: t('sip.headers'), className: 'span-all', flush: true });
   headersDl.body.append(headersTable.el);
   const sdpDl = dashlet({ title: 'SDP', className: 'span-all' });
-  const sbcDl = dashlet({ title: 'Header SBC / CUBE', subtitle: 'identità, deviazioni, cause, session timer', className: 'span-all' });
+  const sbcDl = dashlet({ title: t('sip.sbcTitle'), subtitle: t('sip.sbcSubtitle'), className: 'span-all' });
 
   container.append(h('div', { class: 'tool-grid tool-grid--half' },
     inputDl.el,
@@ -910,6 +918,7 @@ export function render(container, params, ctx) {
   let timer = 0;
   textarea.addEventListener('input', () => {
     ctx.setParams({}); // il testo modificato non è più l'esempio dell'URL
+    lastText = textarea.value;
     clearTimeout(timer);
     timer = setTimeout(update, 150);
   });
@@ -918,7 +927,7 @@ export function render(container, params, ctx) {
     clearTimeout(timer);
     const msg = parseSip(textarea.value);
     if (msg.empty) {
-      summaryDl.body.replaceChildren(h('p', { class: 'empty' }, 'Incolla un messaggio o scegli un esempio.'));
+      summaryDl.body.replaceChildren(h('p', { class: 'empty' }, t('sip.emptyHint')));
       issuesDl.body.replaceChildren(h('p', { class: 'empty' }, '—'));
       issuesDl.setSubtitle('');
       headersDl.el.hidden = true;
@@ -927,10 +936,10 @@ export function render(container, params, ctx) {
       return;
     }
     const counts = issueCounts(msg.issues);
-    issuesDl.setSubtitle([counts.err && `${counts.err} errori`, counts.warn && `${counts.warn} avvisi`, counts.info && `${counts.info} info`].filter(Boolean).join(' · '));
+    issuesDl.setSubtitle([counts.err && tn('sip.countErr', counts.err), counts.warn && tn('sip.countWarn', counts.warn), counts.info && t('sip.countInfo', { n: counts.info })].filter(Boolean).join(' · '));
     issuesDl.body.replaceChildren(...issuesView(msg.issues));
     if (!msg.ok) {
-      summaryDl.body.replaceChildren(h('p', { class: 'empty' }, 'Messaggio non riconosciuto come SIP.'));
+      summaryDl.body.replaceChildren(h('p', { class: 'empty' }, t('sip.notSip')));
       headersDl.el.hidden = true;
       sdpDl.el.hidden = true;
       sbcDl.el.hidden = true;
@@ -938,22 +947,26 @@ export function render(container, params, ctx) {
     }
     summaryDl.body.replaceChildren(...summaryView(msg));
     headersDl.el.hidden = false;
-    headersDl.setSubtitle(`${fmtInt(msg.headers.length)} righe`);
+    headersDl.setSubtitle(tn('sip.rows', msg.headers.length, { n: fmtInt(msg.headers.length) }));
     headersTable.setRows(msg.headers);
     sbcDl.el.hidden = !hasSbcHeaders(msg.sbc);
     if (!sbcDl.el.hidden) sbcDl.body.replaceChildren(...sbcView(msg.sbc));
     sdpDl.el.hidden = !msg.sdp;
     if (msg.sdp) {
-      sdpDl.setSubtitle(`${fmtInt(msg.sdp.media.length)} ${msg.sdp.media.length === 1 ? 'flusso' : 'flussi'}`);
+      sdpDl.setSubtitle(tn('sip.streams', msg.sdp.media.length, { n: fmtInt(msg.sdp.media.length) }));
       sdpDl.body.replaceChildren(...sdpView(msg.sdp, msg.nat));
     }
   }
 
   // L'esempio si carica solo su richiesta esplicita dall'URL (?esempio=invite), mai il testo.
+  // Il testo incollato sopravvive al cambio di lingua (resta solo in memoria, non nell'URL).
   const example = params.get('esempio');
-  textarea.value = EXAMPLES[example] ?? '';
+  textarea.value = EXAMPLES[example] ?? lastText ?? '';
   update();
 }
+
+// Ultimo testo scritto nella pagina, per ricostruirla quando cambia la lingua.
+let lastText = null;
 
 // Anteprima per la Dashboard.
 export function preview() {
@@ -963,11 +976,11 @@ export function preview() {
   return {
     href: '?esempio=invite',
     body: kvList([
-      { label: 'Messaggio', value: `${msg.method} ${msg.uri}` },
-      { label: 'Header', value: fmtInt(msg.headers.length) },
+      { label: t('sip.previewMessage'), value: `${msg.method} ${msg.uri}` },
+      { label: t('sip.headers'), value: fmtInt(msg.headers.length) },
       { label: 'Media', value: `${media.effectiveConnection.address}:${media.port}`, hl: true },
       { label: 'Codec', value: media.codecs.map((c) => c.name).join(', ') },
-      { label: 'Anomalie', value: counts.err + counts.warn ? badge(`${counts.err + counts.warn}`, 'warn') : badge('nessuna', 'ok') },
+      { label: t('sip.anomalies'), value: counts.err + counts.warn ? badge(`${counts.err + counts.warn}`, 'warn') : badge(t('sip.previewNone'), 'ok') },
     ], 'kv--compact'),
   };
 }

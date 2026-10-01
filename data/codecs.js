@@ -1,11 +1,12 @@
 // Codec voce e intestazioni per il calcolatore banda VoIP.
 // bitrate in kbps; la dimensione del payload RTP è bitrate × ptime / 8.
+// Le descrizioni dei codec sono in js/i18n.js (voip.codec.*).
 
 export const CODECS = [
-  { id: 'g711', name: 'G.711', detail: 'PCMU/PCMA, 8 kHz', bitrate: 64 },
-  { id: 'g722', name: 'G.722', detail: 'wideband 16 kHz', bitrate: 64 },
-  { id: 'g729', name: 'G.729', detail: 'CS-ACELP, frame da 10 ms', bitrate: 8 },
-  { id: 'opus', name: 'Opus', detail: 'bitrate variabile', bitrate: 24, variable: true, min: 6, max: 510 },
+  { id: 'g711', name: 'G.711', bitrate: 64 },
+  { id: 'g722', name: 'G.722', bitrate: 64 },
+  { id: 'g729', name: 'G.729', bitrate: 8 },
+  { id: 'opus', name: 'Opus', bitrate: 24, variable: true, min: 6, max: 510 },
 ];
 
 export const OPUS_BITRATES = [12, 16, 20, 24, 32, 40, 48, 64];
@@ -29,14 +30,14 @@ export const HEADERS = {
 
 // SRTP (RFC 3711): authentication tag in coda al pacchetto RTP, MKI non usato.
 export const SRTP = [
-  { id: 'none', label: 'Nessuno', tag: 0 },
+  { id: 'none', label: null, tag: 0 }, // etichetta tradotta (ui.none)
   { id: 'sha1-80', label: 'AES-CM + HMAC-SHA1-80', tag: 10 },
   { id: 'sha1-32', label: 'AES-CM + HMAC-SHA1-32', tag: 4 },
 ];
 
 // IPsec ESP: modalità, cifratura (IV e allineamento del blocco) e integrità (ICV).
 export const IPSEC_MODES = [
-  { id: 'none', label: 'Nessuno' },
+  { id: 'none', label: null }, // etichetta tradotta (ui.none)
   { id: 'tunnel', label: 'ESP tunnel' },
   { id: 'transport', label: 'ESP transport' },
 ];

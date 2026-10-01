@@ -14,6 +14,14 @@ Strumenti di rete e VoIP che girano interamente nel browser, pubblicati su [www.
 
 HTML, CSS e JavaScript vanilla: nessun build step, nessun backend, nessuna chiamata esterna, nessun tracking.
 
+## Lingue
+
+Interfaccia in italiano e inglese (selettore IT/EN nell'header). Tutte le stringhe stanno in `js/i18n.js`, una chiave con entrambe le lingue; i termini tecnici di protocollo restano in inglese. La lingua si sceglie da:
+
+1. parametro nell'URL, es. `#/voce/banda?lang=en` (link condivisibili);
+2. preferenza salvata nel browser (`localStorage`, chiave `rebluc.lang`);
+3. italiano come predefinito.
+
 ## Avvio in locale
 
 Il sito usa moduli ES, quindi va servito via HTTP (aprire `index.html` con doppio clic non funziona):
@@ -45,7 +53,8 @@ node scripts/build-oui.mjs oui.csv
 ```
 index.html     pagina unica (sidebar, header, breadcrumb, contenuti)
 css/           tema (tokens), layout, componenti
-js/app.js      navigazione, tema, ricerca strumenti
+js/app.js      navigazione, tema, lingua, ricerca strumenti
+js/i18n.js     dizionario italiano/inglese e funzioni t()
 js/ui/         componenti condivisi (dashlet, tabella, icone)
 js/tools/      un modulo per strumento: funzioni di calcolo + interfaccia
 data/          tabelle statiche

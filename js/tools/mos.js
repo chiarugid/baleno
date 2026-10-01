@@ -4,7 +4,12 @@
 import { h, fmtDec, kvList, badge, uid } from '../ui/dom.js';
 import { dashlet } from '../ui/dashlet.js';
 import { dataTable } from '../ui/table.js';
+import { t } from '../i18n.js';
 import { EMODEL_CODECS, ADVANTAGE, CATEGORIES } from '../../data/emodel.js';
+
+// Nome e fonte del codec nella lingua corrente.
+export const codecName = (c) => t(`mos.codec.${c.id}`);
+const codecSource = (c) => (c.estimate ? t(`mos.source.${c.id}`) : t('mos.source.g113'));
 
 export const R0 = 93.2;
 export const G114_LIMIT = 150;
@@ -31,7 +36,8 @@ export function rToMos(r) {
 }
 
 export function category(r) {
-  return CATEGORIES.find((c) => r >= c.min);
+  const c = CATEGORIES.find((x) => r >= x.min);
+  return { ...c, label: t(`mos.cat.${c.id}`) };
 }
 
 export function codecParams(codecId, bitrate) {
@@ -48,9 +54,9 @@ export function oneWayDelay({ network = 0, jitterBuffer = 0, packetization = 0 }
 
 export function emodel({ codec = 'g711', bitrate, delayMs = 0, lossPct = 0, advantage = 0, is = 0 } = {}) {
   const p = codecParams(codec, bitrate);
-  if (!p) return { ok: false, field: 'codec', error: 'Codec sconosciuto.' };
-  if (!Number.isFinite(delayMs) || delayMs < 0) return { ok: false, field: 'delay', error: 'Il ritardo deve essere un numero maggiore o uguale a zero.' };
-  if (!Number.isFinite(lossPct) || lossPct < 0 || lossPct > 100) return { ok: false, field: 'loss', error: 'La perdita deve essere tra 0 e 100%.' };
+  if (!p) return { ok: false, field: 'codec', error: t('mos.err.codec') };
+  if (!Number.isFinite(delayMs) || delayMs < 0) return { ok: false, field: 'delay', error: t('mos.err.delay') };
+  if (!Number.isFinite(lossPct) || lossPct < 0 || lossPct > 100) return { ok: false, field: 'loss', error: t('mos.err.loss') };
   const id = delayImpairment(delayMs);
   const ieEff = effectiveIe(p.ie, p.bpl, lossPct);
   const r = R0 - is - id - ieEff + advantage;
@@ -92,37 +98,37 @@ function segmented(name, labelId, options) {
 function scale(r) {
   const bands = [[0, 50, 'err'], [50, 60, 'err'], [60, 70, 'err'], [70, 80, 'warn'], [80, 90, 'ok'], [90, 100, 'ok']];
   const pos = Math.min(100, Math.max(0, r));
-  return h('div', { class: 'rscale', role: 'img', 'aria-label': `Fattore R ${fmtDec(r, 1)} su una scala da 0 a 100` },
+  return h('div', { class: 'rscale', role: 'img', 'aria-label': t('mos.scaleAria', { r: fmtDec(r, 1) }) },
     h('div', { class: 'rscale__bar' }, bands.map(([a, b, s]) => h('span', { class: `rscale__band rscale__band--${s}`, style: `flex-grow:${b - a}` })),
       h('span', { class: 'rscale__marker', style: `left:${pos}%` })),
-    h('div', { class: 'rscale__ticks', 'aria-hidden': 'true' }, ['0', '50', '60', '70', '80', '90', '100'].map((t) => h('span', { style: `left:${t}%` }, t))));
+    h('div', { class: 'rscale__ticks', 'aria-hidden': 'true' }, ['0', '50', '60', '70', '80', '90', '100'].map((n) => h('span', { style: `left:${n}%` }, n))));
 }
 
 function resultView(m, delayParts) {
   const nodes = [
     h('div', { class: 'kpis' },
-      kpi('Fattore R', fmtDec(m.r, 1), '', m.category.state),
+      kpi(t('mos.rFactor'), fmtDec(m.r, 1), '', m.category.state),
       kpi('MOS', fmtDec(m.mos, 2), '', m.category.state),
-      kpi('Qualità (G.109)', m.category.label, '', m.category.state),
-      kpi('Ritardo one-way', fmtDec(m.delayMs, 0), 'ms', m.overG114 ? 'warn' : false)),
+      kpi(t('mos.quality'), m.category.label, '', m.category.state),
+      kpi(t('mos.oneWay'), fmtDec(m.delayMs, 0), 'ms', m.overG114 ? 'warn' : false)),
     scale(m.r),
-    h('h3', { class: 'section-title' }, 'Calcolo'),
+    h('h3', { class: 'section-title' }, t('mos.calculation')),
     kvList([
-      { label: 'R0 (rumore e base)', value: fmtDec(R0, 1) },
-      { label: '− Is (simultaneo)', value: fmtDec(m.is, 1) },
-      { label: '− Id (ritardo)', value: [fmtDec(m.id, 2), h('span', { class: 'sub' }, `${fmtDec(m.delayMs, 0)} ms one-way${delayParts ? ` = ${delayParts}` : ''}`)] },
-      { label: '− Ie,eff (codec e perdita)', value: [fmtDec(m.ieEff, 2), h('span', { class: 'sub' }, `Ie ${fmtDec(m.ie, 1)}, Bpl ${fmtDec(m.bpl, 1)}, perdita ${fmtDec(m.lossPct, 2)}%`)] },
-      { label: '+ A (vantaggio)', value: fmtDec(m.advantage, 0) },
+      { label: t('mos.r0'), value: fmtDec(R0, 1) },
+      { label: t('mos.is'), value: fmtDec(m.is, 1) },
+      { label: t('mos.id'), value: [fmtDec(m.id, 2), h('span', { class: 'sub' }, t('mos.idSub', { n: fmtDec(m.delayMs, 0), parts: delayParts ? ` = ${delayParts}` : '' }))] },
+      { label: t('mos.ieEff'), value: [fmtDec(m.ieEff, 2), h('span', { class: 'sub' }, t('mos.ieSub', { ie: fmtDec(m.ie, 1), bpl: fmtDec(m.bpl, 1), loss: fmtDec(m.lossPct, 2) }))] },
+      { label: t('mos.a'), value: fmtDec(m.advantage, 0) },
       { label: '= R', value: fmtDec(m.r, 2), hl: true },
       { label: 'MOS', value: fmtDec(m.mos, 2), hl: true },
     ]),
   ];
   const notes = [];
-  if (m.delayMs > 400) notes.push(h('li', { class: 'note note--err' }, badge('G.114', 'err'), ` Ritardo one-way di ${fmtDec(m.delayMs, 0)} ms: oltre 400 ms è inaccettabile per la conversazione.`));
-  else if (m.overG114) notes.push(h('li', { class: 'note note--warn' }, badge('G.114', 'warn'), ` Ritardo one-way di ${fmtDec(m.delayMs, 0)} ms, oltre i 150 ms raccomandati: la conversazione diventa meno interattiva.`));
-  if (m.codec.estimate) notes.push(h('li', { class: 'note note--warn' }, badge('stima', 'warn'), ` ${m.codec.name}: ${m.codec.source}.`));
-  if (m.r < 50) notes.push(h('li', { class: 'note note--err' }, 'R sotto 50: qualità non raccomandata (G.109).'));
-  notes.push(h('li', { class: 'note' }, 'Ipotesi: perdita casuale (BurstR = 1), Is = 0, Id ≈ 0,024·d + 0,11·(d − 177,3) oltre 177,3 ms (approssimazione dell’Id di G.107 di Cole e Rosenbluth, ACM SIGCOMM CCR 2001). È una stima di pianificazione, non una misura.'));
+  if (m.delayMs > 400) notes.push(h('li', { class: 'note note--err' }, badge('G.114', 'err'), t('mos.g114Err', { n: fmtDec(m.delayMs, 0) })));
+  else if (m.overG114) notes.push(h('li', { class: 'note note--warn' }, badge('G.114', 'warn'), t('mos.g114Warn', { n: fmtDec(m.delayMs, 0) })));
+  if (m.codec.estimate) notes.push(h('li', { class: 'note note--warn' }, badge(t('mos.estimate'), 'warn'), ` ${codecName(m.codec)}: ${codecSource(m.codec)}.`));
+  if (m.r < 50) notes.push(h('li', { class: 'note note--err' }, t('mos.below50')));
+  notes.push(h('li', { class: 'note' }, t('mos.assumptions')));
   nodes.push(h('ul', { class: 'notes' }, notes));
   return nodes;
 }
@@ -131,54 +137,54 @@ export function render(container, params, ctx) {
   const v = (key) => params.get(key) ?? DEFAULTS[key];
   const ids = { codec: uid('codec'), br: uid('br'), mode: uid('mode'), a: uid('a') };
 
-  const codecSelect = h('select', { id: ids.codec, class: 'input' }, EMODEL_CODECS.map((c) => h('option', { value: c.id }, c.name)));
+  const codecSelect = h('select', { id: ids.codec, class: 'input' }, EMODEL_CODECS.map((c) => h('option', { value: c.id }, codecName(c))));
   const opus = EMODEL_CODECS.find((c) => c.variants);
   const brSelect = h('select', { id: ids.br, class: 'input' }, opus.variants.map((x) => h('option', { value: x.bitrate }, `${x.bitrate} kbit/s (Ie ${x.ie})`)));
-  const brField = h('div', { class: 'field' }, h('label', { for: ids.br }, 'Bitrate Opus'), brSelect);
+  const brField = h('div', { class: 'field' }, h('label', { for: ids.br }, t('mos.opusBitrate')), brSelect);
   const codecHint = h('span', { class: 'field__hint' });
 
-  const modeGroup = segmented(ids.mode, `${ids.mode}-l`, [['parti', 'Componenti'], ['totale', 'Totale']]);
-  const total = numberField(uid('d'), 'Ritardo one-way', 'ms');
-  const net = numberField(uid('net'), 'Rete', 'ms');
+  const modeGroup = segmented(ids.mode, `${ids.mode}-l`, [['parti', t('mos.parts')], ['totale', t('mos.total')]]);
+  const total = numberField(uid('d'), t('mos.oneWay'), 'ms');
+  const net = numberField(uid('net'), t('mos.network'), 'ms');
   const jb = numberField(uid('jb'), 'Jitter buffer', 'ms');
   const pt = numberField(uid('pt'), 'Packetization', 'ms');
   const partsRow = h('div', { class: 'field-row field-row--3' }, net.el, jb.el, pt.el);
-  const loss = numberField(uid('loss'), 'Perdita pacchetti', '%');
-  const aSelect = h('select', { id: ids.a, class: 'input' }, ADVANTAGE.map((x) => h('option', { value: x.value }, x.label)));
+  const loss = numberField(uid('loss'), t('mos.loss'), '%');
+  const aSelect = h('select', { id: ids.a, class: 'input' }, ADVANTAGE.map((x) => h('option', { value: x }, t(`mos.adv.${x}`))));
 
   const reset = () => { fill(DEFAULTS); update(); };
   const form = h('form', { novalidate: true },
-    h('div', { class: 'field' }, h('label', { for: ids.codec }, 'Codec'), codecSelect, codecHint),
+    h('div', { class: 'field' }, h('label', { for: ids.codec }, t('voip.codec')), codecSelect, codecHint),
     brField,
-    h('fieldset', { class: 'field field--plain' }, h('legend', { class: 'field__label', id: `${ids.mode}-l` }, 'Ritardo'), modeGroup),
+    h('fieldset', { class: 'field field--plain' }, h('legend', { class: 'field__label', id: `${ids.mode}-l` }, t('mos.delay')), modeGroup),
     partsRow,
     total.el,
     loss.el,
-    h('div', { class: 'field' }, h('label', { for: ids.a }, 'Fattore di vantaggio A'), aSelect,
-      h('span', { class: 'field__hint' }, 'Quanto l’utente tollera la qualità in cambio della comodità (G.107).')),
-    h('div', { class: 'form-actions' }, h('button', { type: 'button', class: 'btn btn--secondary', onclick: reset }, 'Reset')));
+    h('div', { class: 'field' }, h('label', { for: ids.a }, t('mos.advantage')), aSelect,
+      h('span', { class: 'field__hint' }, t('mos.advantageHint'))),
+    h('div', { class: 'form-actions' }, h('button', { type: 'button', class: 'btn btn--secondary', onclick: reset }, t('ui.resetBtn'))));
   form.addEventListener('submit', (e) => e.preventDefault());
   form.addEventListener('input', update);
   form.addEventListener('change', update);
 
-  const formDl = dashlet({ title: 'Parametri', expandable: false, onReset: reset });
+  const formDl = dashlet({ title: t('ui.parameters'), expandable: false, onReset: reset });
   formDl.body.append(form);
-  const resultDl = dashlet({ title: 'Risultato' });
+  const resultDl = dashlet({ title: t('ui.result') });
 
   const table = dataTable({
     columns: [
-      { key: 'name', label: 'Codec' },
+      { key: 'name', label: t('voip.codec') },
       { key: 'ieEff', label: 'Ie,eff', align: 'right', format: (r) => fmtDec(r.ieEff, 1) },
       { key: 'r', label: 'R', align: 'right', format: (r) => fmtDec(r.r, 1) },
       { key: 'mos', label: 'MOS', align: 'right', format: (r) => fmtDec(r.mos, 2) },
-      { key: 'quality', label: 'Qualità' },
-      { key: 'note', label: 'Nota', sortable: false },
+      { key: 'quality', label: t('mos.colQuality') },
+      { key: 'note', label: t('mos.colNote'), sortable: false },
     ],
     pageSize: 10,
     pageSizes: [10, 25],
-    filterPlaceholder: 'Filtra codec…',
+    filterPlaceholder: t('voip.filterCodec'),
   });
-  const compareDl = dashlet({ title: 'Confronto codec', className: 'span-all', flush: true });
+  const compareDl = dashlet({ title: t('voip.compare'), className: 'span-all', flush: true });
   compareDl.body.append(table.el);
 
   container.append(h('div', { class: 'tool-grid' }, formDl.el, resultDl.el, compareDl.el));
@@ -195,12 +201,12 @@ export function render(container, params, ctx) {
     jb.input.value = x.jb;
     pt.input.value = x.pt;
     loss.input.value = x.loss;
-    aSelect.value = ADVANTAGE.some((a) => String(a.value) === String(x.a)) ? String(x.a) : DEFAULTS.a;
+    aSelect.value = ADVANTAGE.some((a) => String(a) === String(x.a)) ? String(x.a) : DEFAULTS.a;
   }
 
   function read(field, label) {
     const n = parse(field.input.value);
-    field.error.textContent = n == null ? `${label}: inserisci un numero ≥ 0.` : '';
+    field.error.textContent = n == null ? t('mos.err.field', { label }) : '';
     if (n == null) field.input.setAttribute('aria-invalid', 'true');
     else field.input.removeAttribute('aria-invalid');
     return n;
@@ -213,7 +219,7 @@ export function render(container, params, ctx) {
     if (codec.id !== lastCodec) { pt.input.value = String(codec.ptime); lastCodec = codec.id; }
     brField.hidden = !codec.variants;
     const p = codecParams(codec.id, brSelect.value);
-    codecHint.textContent = `Ie ${fmtDec(p.ie, 1)}, Bpl ${fmtDec(p.bpl, 1)} · ${codec.source}`;
+    codecHint.textContent = `Ie ${fmtDec(p.ie, 1)}, Bpl ${fmtDec(p.bpl, 1)} · ${codecSource(codec)}`;
     const byParts = mode() === 'parti';
     partsRow.hidden = !byParts;
     total.el.hidden = byParts;
@@ -221,17 +227,17 @@ export function render(container, params, ctx) {
     let delay;
     let parts = '';
     if (byParts) {
-      const n = read(net, 'Rete'); const j = read(jb, 'Jitter buffer'); const k = read(pt, 'Packetization');
+      const n = read(net, t('mos.network')); const j = read(jb, 'Jitter buffer'); const k = read(pt, 'Packetization');
       if (n == null || j == null || k == null) return;
       delay = oneWayDelay({ network: n, jitterBuffer: j, packetization: k });
-      parts = `${fmtDec(n, 0)} rete + ${fmtDec(j, 0)} jitter buffer + ${fmtDec(k, 0)} packetization`;
+      parts = t('mos.partsText', { net: fmtDec(n, 0), jb: fmtDec(j, 0), pt: fmtDec(k, 0) });
     } else {
-      delay = read(total, 'Ritardo');
+      delay = read(total, t('mos.delay'));
       if (delay == null) return;
     }
-    const lossPct = read(loss, 'Perdita');
+    const lossPct = read(loss, t('mos.lossShort'));
     if (lossPct == null) return;
-    if (lossPct > 100) { loss.error.textContent = 'La perdita deve essere tra 0 e 100%.'; loss.input.setAttribute('aria-invalid', 'true'); return; }
+    if (lossPct > 100) { loss.error.textContent = t('mos.err.loss'); loss.input.setAttribute('aria-invalid', 'true'); return; }
 
     const advantage = Number(aSelect.value);
     const m = emodel({ codec: codec.id, bitrate: brSelect.value, delayMs: delay, lossPct, advantage });
@@ -239,9 +245,9 @@ export function render(container, params, ctx) {
 
     table.setRows(EMODEL_CODECS.flatMap((c) => (c.variants ? c.variants.map((x) => x.bitrate) : [null]).map((bitrate) => {
       const r = emodel({ codec: c.id, bitrate, delayMs: delay, lossPct, advantage });
-      return { ...r, name: bitrate ? `Opus ${bitrate} kbit/s` : c.name, quality: r.category.label, note: c.estimate ? 'stima' : '' };
+      return { ...r, name: bitrate ? `Opus ${bitrate} kbit/s` : codecName(c), quality: r.category.label, note: c.estimate ? t('mos.estimate') : '' };
     })));
-    compareDl.setSubtitle(`stesso ritardo (${fmtDec(delay, 0)} ms) e perdita (${fmtDec(lossPct, 2)}%)`);
+    compareDl.setSubtitle(t('mos.compareSub', { delay: fmtDec(delay, 0), loss: fmtDec(lossPct, 2) }));
 
     ctx.setParams({
       codec: codec.id, br: codec.variants ? brSelect.value : '', mode: byParts ? '' : 'totale',
@@ -264,7 +270,7 @@ export function preview() {
     body: kvList([
       { label: 'G.711, 100 ms, 0%', value: `R ${fmtDec(a.r, 1)} · MOS ${fmtDec(a.mos, 2)}`, hl: true },
       { label: 'G.729A, 100 ms, 1%', value: `R ${fmtDec(b.r, 1)} · MOS ${fmtDec(b.mos, 2)}` },
-      { label: 'Soglia G.114', value: `${G114_LIMIT} ms one-way` },
+      { label: t('mos.g114Threshold'), value: `${G114_LIMIT} ms one-way` },
     ], 'kv--compact'),
   };
 }

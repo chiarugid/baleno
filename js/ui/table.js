@@ -6,6 +6,7 @@
 
 import { h, fmtInt } from './dom.js';
 import { icon } from './icons.js';
+import { t } from '../i18n.js';
 
 const collator = new Intl.Collator('it', { numeric: true, sensitivity: 'base' });
 
@@ -22,9 +23,9 @@ export function dataTable({
   columns,
   pageSize = 15,
   pageSizes = [10, 15, 25, 50, 100],
-  emptyText = 'Nessun dato',
-  filterPlaceholder = 'Filtra…',
-  pageNote = 'Ordinamento e filtro agiscono solo sulla pagina corrente.',
+  emptyText = t('ui.noData'),
+  filterPlaceholder = t('ui.filter'),
+  pageNote = t('ui.pageNote'),
 } = {}) {
   const state = { rows: [], source: null, view: [], filter: '', sortKey: null, sortDir: 1, page: 0, pageSize };
 
@@ -34,7 +35,7 @@ export function dataTable({
   };
 
   const filterInput = h('input', {
-    type: 'search', class: 'input input--sm', placeholder: filterPlaceholder, 'aria-label': 'Filtra righe',
+    type: 'search', class: 'input input--sm', placeholder: filterPlaceholder, 'aria-label': t('ui.filterRows'),
     oninput: () => {
       state.filter = filterInput.value.trim().toLowerCase();
       // Con la sorgente virtuale il filtro vale per la pagina: non si torna alla prima.
@@ -62,17 +63,17 @@ export function dataTable({
   const info = h('span', { class: 'pager__info' });
   const pageLabel = h('span', { class: 'pager__page' });
   const navBtn = (name, label, fn) => h('button', { type: 'button', class: 'icon-btn icon-btn--sm', 'aria-label': label, title: label, onclick: fn }, icon(name));
-  const first = navBtn('chevronsLeft', 'Prima pagina', () => goTo(0));
-  const prev = navBtn('chevronLeft', 'Pagina precedente', () => goTo(state.page - 1));
-  const next = navBtn('chevronRight', 'Pagina successiva', () => goTo(state.page + 1));
-  const last = navBtn('chevronsRight', 'Ultima pagina', () => goTo(Infinity));
+  const first = navBtn('chevronsLeft', t('ui.firstPage'), () => goTo(0));
+  const prev = navBtn('chevronLeft', t('ui.prevPage'), () => goTo(state.page - 1));
+  const next = navBtn('chevronRight', t('ui.nextPage'), () => goTo(state.page + 1));
+  const last = navBtn('chevronsRight', t('ui.lastPage'), () => goTo(Infinity));
   const sizeSelect = h('select', {
-    class: 'input input--sm', 'aria-label': 'Righe per pagina',
+    class: 'input input--sm', 'aria-label': t('ui.rowsPerPage'),
     onchange: () => { state.pageSize = Number(sizeSelect.value); state.page = 0; render(); },
   }, pageSizes.map((n) => h('option', { value: n, selected: n === pageSize }, n)));
   const pager = h('div', { class: 'pager' },
     info,
-    h('label', { class: 'pager__size' }, 'Righe', sizeSelect),
+    h('label', { class: 'pager__size' }, t('ui.rows'), sizeSelect),
     h('div', { class: 'pager__nav' }, first, prev, pageLabel, next, last));
 
   const el = h('div', { class: 'data-table' }, toolbar, h('div', { class: 'table-wrap' }, table), pager);
@@ -133,7 +134,7 @@ export function dataTable({
     }, cellText(col, row)))));
     if (!trs.length) {
       let text = emptyText;
-      if (state.filter) text = state.source ? 'Nessuna riga della pagina corrente corrisponde al filtro' : 'Nessuna riga corrisponde al filtro';
+      if (state.filter) text = state.source ? t('ui.noMatchPage') : t('ui.noMatch');
       trs.push(h('tr', { class: 'empty-row' }, h('td', { colspan: columns.length }, text)));
     }
     tbody.replaceChildren(...trs);
@@ -149,8 +150,8 @@ export function dataTable({
     });
 
     note.textContent = state.source ? pageNote : '';
-    let infoText = total ? `${fmtInt(start + 1)}–${fmtInt(end)} di ${fmtInt(total)}` : '0 righe';
-    if (state.source && state.filter) infoText += ` · ${fmtInt(pageRows.length)} su ${fmtInt(end - start)} della pagina corrispondono`;
+    let infoText = total ? t('ui.rangeOf', { from: fmtInt(start + 1), to: fmtInt(end), total: fmtInt(total) }) : t('ui.zeroRows');
+    if (state.source && state.filter) infoText += t('ui.pageMatches', { n: fmtInt(pageRows.length), of: fmtInt(end - start) });
     info.textContent = infoText;
     pageLabel.textContent = `${fmtInt(state.page + 1)} / ${fmtInt(pages)}`;
     first.disabled = prev.disabled = state.page === 0;

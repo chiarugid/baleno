@@ -2,6 +2,7 @@
 
 import { h, uid } from './dom.js';
 import { icon } from './icons.js';
+import { t } from '../i18n.js';
 
 let maximized = null;
 
@@ -20,10 +21,10 @@ export function dashlet({ title, subtitle, actions = [], expandable = true, onRe
 
   for (const action of actions) actionsEl.append(iconButton(action.icon, action.label, action.onclick));
   if (expandable) {
-    const btn = iconButton('expand', 'Espandi', () => toggleMaximize(el, btn));
+    const btn = iconButton('expand', t('ui.expand'), () => toggleMaximize(el, btn));
     actionsEl.append(btn);
   }
-  if (onReset) actionsEl.append(iconButton('reset', 'Reimposta', onReset));
+  if (onReset) actionsEl.append(iconButton('reset', t('ui.reset'), onReset));
 
   return {
     el,
@@ -68,7 +69,7 @@ function toggleMaximize(el, btn) {
   const backdrop = createBackdrop();
   document.body.append(backdrop);
   el.classList.add('is-max');
-  setButton(btn, 'shrink', 'Riduci');
+  setButton(btn, 'shrink', t('ui.shrink'));
   maximized = { el, btn, backdrop };
   document.addEventListener('keydown', onKey);
 }
@@ -77,7 +78,7 @@ export function closeMaximized() {
   if (!maximized) return;
   maximized.el.classList.remove('is-max');
   maximized.backdrop.remove();
-  setButton(maximized.btn, 'expand', 'Espandi');
+  setButton(maximized.btn, 'expand', t('ui.expand'));
   document.removeEventListener('keydown', onKey);
   maximized = null;
 }

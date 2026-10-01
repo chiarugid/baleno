@@ -5,6 +5,7 @@
 import { h, fmtInt, kvList, badge, copyText, toast, uid } from '../ui/dom.js';
 import { dashlet } from '../ui/dashlet.js';
 import { dataTable } from '../ui/table.js';
+import { t } from '../i18n.js';
 
 // ---------------------------------------------------------------- IPv4
 
@@ -38,32 +39,36 @@ export function prefixFromMask(mask) {
   return prefix;
 }
 
+// Tipi di indirizzo come identificativi stabili; l'etichetta mostrata è in i18n (subnet.type.*).
 const V4_TYPES = [
-  ['0.0.0.0/8', '"Questa rete" (RFC 1122)'],
-  ['10.0.0.0/8', 'Privato (RFC 1918)'],
-  ['100.64.0.0/10', 'CGNAT (RFC 6598)'],
-  ['127.0.0.0/8', 'Loopback'],
-  ['169.254.0.0/16', 'Link-local (APIPA)'],
-  ['172.16.0.0/12', 'Privato (RFC 1918)'],
-  ['192.0.0.0/24', 'Assegnazioni IETF (RFC 6890)'],
-  ['192.0.2.0/24', 'Documentazione TEST-NET-1'],
-  ['192.88.99.0/24', '6to4 relay anycast (deprecato)'],
-  ['192.168.0.0/16', 'Privato (RFC 1918)'],
-  ['198.18.0.0/15', 'Benchmark (RFC 2544)'],
-  ['198.51.100.0/24', 'Documentazione TEST-NET-2'],
-  ['203.0.113.0/24', 'Documentazione TEST-NET-3'],
-  ['224.0.0.0/4', 'Multicast'],
-  ['255.255.255.255/32', 'Broadcast limitato'],
-  ['240.0.0.0/4', 'Riservato (classe E)'],
-].map(([cidr, label]) => {
+  ['0.0.0.0/8', 'thisNet'],
+  ['10.0.0.0/8', 'private'],
+  ['100.64.0.0/10', 'cgnat'],
+  ['127.0.0.0/8', 'loopback'],
+  ['169.254.0.0/16', 'linkLocal4'],
+  ['172.16.0.0/12', 'private'],
+  ['192.0.0.0/24', 'ietf'],
+  ['192.0.2.0/24', 'testnet1'],
+  ['192.88.99.0/24', 'relay6to4'],
+  ['192.168.0.0/16', 'private'],
+  ['198.18.0.0/15', 'benchmark'],
+  ['198.51.100.0/24', 'testnet2'],
+  ['203.0.113.0/24', 'testnet3'],
+  ['224.0.0.0/4', 'multicast'],
+  ['255.255.255.255/32', 'limitedBroadcast'],
+  ['240.0.0.0/4', 'classE'],
+].map(([cidr, id]) => {
   const [addr, len] = cidr.split('/');
   const prefix = Number(len);
-  return { network: parseIPv4(addr), mask: maskFromPrefix(prefix), label };
+  return { network: parseIPv4(addr), mask: maskFromPrefix(prefix), id };
 });
 
+export function ipv4TypeId(addr) {
+  return V4_TYPES.find((x) => ((addr & x.mask) >>> 0) === x.network)?.id ?? 'public';
+}
+
 export function ipv4Type(addr) {
-  const hit = V4_TYPES.find((t) => ((addr & t.mask) >>> 0) === t.network);
-  return hit ? hit.label : 'Pubblico';
+  return t(`subnet.type.${ipv4TypeId(addr)}`);
 }
 
 function ipv4Class(addr) {
@@ -71,8 +76,8 @@ function ipv4Class(addr) {
   if (first < 128) return 'A';
   if (first < 192) return 'B';
   if (first < 224) return 'C';
-  if (first < 240) return 'D (multicast)';
-  return 'E (riservata)';
+  if (first < 240) return t('subnet.class.D');
+  return t('subnet.class.E');
 }
 
 export function calcIPv4(addr, prefix) {
@@ -97,7 +102,7 @@ export function calcIPv4(addr, prefix) {
   }
   return {
     version: 4, address: addr, prefix, mask, wildcard, network, broadcast,
-    first, last, total, usable, class: ipv4Class(addr), type: ipv4Type(addr),
+    first, last, total, usable, class: ipv4Class(addr), type: ipv4Type(addr), typeId: ipv4TypeId(addr),
   };
 }
 
@@ -162,30 +167,33 @@ export function formatIPv6(value) {
 }
 
 const V6_TYPES = [
-  ['::/128', 'Non specificato'],
-  ['::1/128', 'Loopback'],
-  ['::ffff:0:0/96', 'IPv4-mapped'],
-  ['64:ff9b::/96', 'NAT64 (RFC 6052)'],
-  ['100::/64', 'Discard (RFC 6666)'],
-  ['2001::/32', 'Teredo'],
-  ['2001:db8::/32', 'Documentazione (RFC 3849)'],
-  ['2002::/16', '6to4'],
-  ['fc00::/7', 'Unique Local (ULA)'],
-  ['fe80::/10', 'Link-local'],
-  ['ff00::/8', 'Multicast'],
-  ['2000::/3', 'Global unicast'],
-].map(([cidr, label]) => {
+  ['::/128', 'unspecified'],
+  ['::1/128', 'loopback'],
+  ['::ffff:0:0/96', 'mapped'],
+  ['64:ff9b::/96', 'nat64'],
+  ['100::/64', 'discard'],
+  ['2001::/32', 'teredo'],
+  ['2001:db8::/32', 'documentation'],
+  ['2002::/16', 'sixToFour'],
+  ['fc00::/7', 'ula'],
+  ['fe80::/10', 'linkLocal'],
+  ['ff00::/8', 'multicast'],
+  ['2000::/3', 'global'],
+].map(([cidr, id]) => {
   const [addr, len] = cidr.split('/');
-  return { network: parseIPv6(addr), mask: maskFromPrefix6(Number(len)), label };
+  return { network: parseIPv6(addr), mask: maskFromPrefix6(Number(len)), id };
 });
 
 function maskFromPrefix6(prefix) {
   return V6_MAX ^ ((1n << BigInt(128 - prefix)) - 1n);
 }
 
+export function ipv6TypeId(addr) {
+  return V6_TYPES.find((x) => (addr & x.mask) === x.network)?.id ?? 'reserved';
+}
+
 export function ipv6Type(addr) {
-  const hit = V6_TYPES.find((t) => (addr & t.mask) === t.network);
-  return hit ? hit.label : 'Riservato / non assegnato';
+  return t(`subnet.type.${ipv6TypeId(addr)}`);
 }
 
 export function calcIPv6(addr, prefix) {
@@ -194,7 +202,7 @@ export function calcIPv6(addr, prefix) {
   const last = network | (V6_MAX ^ mask);
   return {
     version: 6, address: addr, prefix, network, first: network, last,
-    total: 1n << BigInt(128 - prefix), type: ipv6Type(addr),
+    total: 1n << BigInt(128 - prefix), type: ipv6Type(addr), typeId: ipv6TypeId(addr),
   };
 }
 
@@ -205,7 +213,7 @@ export function calcIPv6(addr, prefix) {
 export function parseInput(addressText, prefixText = '') {
   let addrPart = String(addressText ?? '').trim();
   let prefPart = String(prefixText ?? '').trim();
-  if (!addrPart) return { ok: false, field: 'address', error: 'Inserisci un indirizzo IP.' };
+  if (!addrPart) return { ok: false, field: 'address', error: t('subnet.err.address') };
 
   const slash = addrPart.indexOf('/');
   if (slash >= 0) {
@@ -218,23 +226,23 @@ export function parseInput(addressText, prefixText = '') {
   const version = addrPart.includes(':') ? 6 : 4;
   const address = version === 4 ? parseIPv4(addrPart) : parseIPv6(addrPart);
   if (address == null) {
-    return { ok: false, field: 'address', error: version === 4 ? 'Indirizzo IPv4 non valido.' : 'Indirizzo IPv6 non valido.' };
+    return { ok: false, field: 'address', error: version === 4 ? t('subnet.err.ipv4') : t('subnet.err.ipv6') };
   }
 
   prefPart = prefPart.replace(/^\//, '');
-  if (!prefPart) return { ok: false, field: 'prefix', error: 'Indica il prefisso (es. /24) o la maschera.' };
+  if (!prefPart) return { ok: false, field: 'prefix', error: t('subnet.err.prefixMissing') };
 
   const maxBits = version === 4 ? 32 : 128;
   let prefix;
   if (/^\d{1,3}$/.test(prefPart)) {
     prefix = Number(prefPart);
-    if (prefix > maxBits) return { ok: false, field: 'prefix', error: `Il prefisso deve essere tra 0 e ${maxBits}.` };
+    if (prefix > maxBits) return { ok: false, field: 'prefix', error: t('subnet.err.prefixRange', { max: maxBits }) };
   } else if (version === 4) {
     const mask = parseIPv4(prefPart);
     prefix = mask == null ? null : prefixFromMask(mask);
-    if (prefix == null) return { ok: false, field: 'prefix', error: 'Maschera non valida (i bit a 1 devono essere contigui).' };
+    if (prefix == null) return { ok: false, field: 'prefix', error: t('subnet.err.mask') };
   } else {
-    return { ok: false, field: 'prefix', error: 'Per IPv6 indica la lunghezza del prefisso (0–128).' };
+    return { ok: false, field: 'prefix', error: t('subnet.err.v6prefix') };
   }
 
   return { ok: true, version, address, prefix };
@@ -268,8 +276,8 @@ export function splitPlan(count) {
     mode: full ? 'full' : 'paged',
     exportable,
     notes: [
-      full ? null : `Oltre ${fmtInt(LIMITS.displayRows)} righe: la tabella sfoglia tutte le ${fmtInt(count)} sottoreti, ma ordinamento e filtro agiscono solo sulla pagina corrente.`,
-      exportable ? null : `Esportazione CSV disponibile fino a ${fmtInt(LIMITS.exportRows)} righe: questa suddivisione ne ha ${fmtInt(count)}. Scegli un nuovo prefisso più corto o suddividi una rete più piccola.`,
+      full ? null : t('subnet.limit.paged', { limit: fmtInt(LIMITS.displayRows), n: fmtInt(count) }),
+      exportable ? null : t('subnet.limit.export', { limit: fmtInt(LIMITS.exportRows), n: fmtInt(count) }),
     ].filter(Boolean),
   };
 }
@@ -284,39 +292,39 @@ function ceilLog2(n) {
 export function subdivide(result, mode, valueText) {
   const maxBits = result.version === 4 ? 32 : 128;
   const raw = String(valueText ?? '').trim().replace(/^\//, '');
-  if (!/^\d+$/.test(raw)) return { ok: false, error: 'Inserisci un numero intero.' };
+  if (!/^\d+$/.test(raw)) return { ok: false, error: t('subnet.err.integer') };
   const value = BigInt(raw);
 
   let newPrefix;
   if (mode === 'prefix') {
     newPrefix = Number(value);
   } else if (mode === 'count') {
-    if (value < 1n) return { ok: false, error: 'Servono almeno 1 sottorete.' };
+    if (value < 1n) return { ok: false, error: t('subnet.err.minSubnets') };
     newPrefix = result.prefix + ceilLog2(value);
   } else if (mode === 'hosts') {
-    if (value < 1n) return { ok: false, error: 'Indica almeno 1 host.' };
+    if (value < 1n) return { ok: false, error: t('subnet.err.minHosts') };
     let needed = value;
     // IPv4: rete e broadcast non sono assegnabili, salvo /31 (RFC 3021) e /32.
     if (result.version === 4 && value > 2n) needed = value + 2n;
     newPrefix = maxBits - ceilLog2(needed);
   } else {
-    return { ok: false, error: 'Modalità di suddivisione sconosciuta.' };
+    return { ok: false, error: t('subnet.err.mode') };
   }
 
   if (newPrefix > maxBits) {
-    return { ok: false, error: `Il prefisso risultante (/${newPrefix}) supera /${maxBits}.` };
+    return { ok: false, error: t('subnet.err.prefixTooLong', { prefix: newPrefix, max: maxBits }) };
   }
   if (newPrefix <= result.prefix) {
     return {
       ok: false,
       error: mode === 'hosts'
-        ? `Una /${result.prefix} non basta: serve almeno una /${newPrefix}.`
-        : `Il nuovo prefisso deve essere più lungo di /${result.prefix}.`,
+        ? t('subnet.err.notEnough', { prefix: result.prefix, needed: newPrefix })
+        : t('subnet.err.mustBeLonger', { prefix: result.prefix }),
     };
   }
   const bits = newPrefix - result.prefix;
   if (bits > LIMITS.calcBits) {
-    return { ok: false, error: `Troppe sottoreti (2^${bits}): il massimo calcolabile è 2^${LIMITS.calcBits}.` };
+    return { ok: false, error: t('subnet.err.tooMany', { bits, max: LIMITS.calcBits }) };
   }
 
   const count = 2 ** bits;
@@ -358,10 +366,9 @@ export function subdivide(result, mode, valueText) {
 // CSV con separatore ";" (compatibile con Excel in italiano), una riga per sottorete.
 export function subnetsCsv(split, version) {
   if (split.count > LIMITS.exportRows) {
-    return { ok: false, error: `Esportazione limitata a ${fmtInt(LIMITS.exportRows)} righe.` };
+    return { ok: false, error: t('subnet.err.exportLimit', { n: fmtInt(LIMITS.exportRows) }) };
   }
-  const head = version === 4 ? ['#', 'Rete', 'Primo host', 'Ultimo host', 'Broadcast', 'Host utilizzabili'] : ['#', 'Rete', 'Primo indirizzo', 'Ultimo indirizzo', 'Indirizzi'];
-  const lines = [head.join(';')];
+  const lines = [version === 4 ? t('subnet.csv.headV4') : t('subnet.csv.headV6')];
   for (let i = 0; i < split.count; i++) {
     const r = split.getRow(i);
     lines.push((version === 4
@@ -376,25 +383,25 @@ export function subnetsCsv(split, version) {
 export function resultAsText(r) {
   const lines = r.version === 4
     ? [
-      ['Indirizzo', formatIPv4(r.address)],
-      ['Rete', `${formatIPv4(r.network)}/${r.prefix}`],
-      ['Maschera', formatIPv4(r.mask)],
-      ['Wildcard', formatIPv4(r.wildcard)],
-      ['Broadcast', r.broadcast == null ? '—' : formatIPv4(r.broadcast)],
-      ['Primo host', formatIPv4(r.first)],
-      ['Ultimo host', formatIPv4(r.last)],
-      ['Host utilizzabili', fmtInt(r.usable)],
-      ['Indirizzi totali', fmtInt(r.total)],
-      ['Tipo', r.type],
+      [t('subnet.address'), formatIPv4(r.address)],
+      [t('subnet.network'), `${formatIPv4(r.network)}/${r.prefix}`],
+      [t('subnet.mask'), formatIPv4(r.mask)],
+      [t('subnet.wildcard'), formatIPv4(r.wildcard)],
+      [t('subnet.broadcast'), r.broadcast == null ? '—' : formatIPv4(r.broadcast)],
+      [t('subnet.firstHost'), formatIPv4(r.first)],
+      [t('subnet.lastHost'), formatIPv4(r.last)],
+      [t('subnet.usableHosts'), fmtInt(r.usable)],
+      [t('subnet.totalAddresses'), fmtInt(r.total)],
+      [t('subnet.type'), r.type],
     ]
     : [
-      ['Indirizzo', formatIPv6(r.address)],
-      ['Espanso', formatIPv6Expanded(r.address)],
-      ['Rete', `${formatIPv6(r.network)}/${r.prefix}`],
-      ['Primo indirizzo', formatIPv6(r.first)],
-      ['Ultimo indirizzo', formatIPv6(r.last)],
-      ['Indirizzi totali', fmtInt(r.total)],
-      ['Tipo', r.type],
+      [t('subnet.address'), formatIPv6(r.address)],
+      [t('subnet.expanded'), formatIPv6Expanded(r.address)],
+      [t('subnet.network'), `${formatIPv6(r.network)}/${r.prefix}`],
+      [t('subnet.firstAddress'), formatIPv6(r.first)],
+      [t('subnet.lastAddress'), formatIPv6(r.last)],
+      [t('subnet.totalAddresses'), fmtInt(r.total)],
+      [t('subnet.type'), r.type],
     ];
   return lines.map(([k, v]) => `${k}: ${v}`).join('\n');
 }
@@ -404,11 +411,15 @@ export function resultAsText(r) {
 const DEFAULT_IP = '192.168.10.0/26';
 const EXAMPLES = ['192.168.10.0/26', '172.16.5.130/27', '10.0.0.0 255.255.252.0', '2001:db8:acad::/48'];
 
-function typeBadge(type) {
-  if (/Pubblico|Global/.test(type)) return badge(type, 'ok');
-  if (/Privato|Unique Local|CGNAT|Link-local/.test(type)) return badge(type, 'info');
-  if (/Riservato|Documentazione|Benchmark|deprecato|Discard|Non specificato/.test(type)) return badge(type, 'warn');
-  return badge(type);
+const TYPE_KIND = {
+  public: 'ok', global: 'ok',
+  private: 'info', ula: 'info', cgnat: 'info', linkLocal: 'info', linkLocal4: 'info',
+  reserved: 'warn', classE: 'warn', testnet1: 'warn', testnet2: 'warn', testnet3: 'warn', documentation: 'warn',
+  benchmark: 'warn', relay6to4: 'warn', discard: 'warn', unspecified: 'warn',
+};
+
+function typeBadge(r) {
+  return badge(r.type, TYPE_KIND[r.typeId] ?? '');
 }
 
 function bitsView(value, prefix) {
@@ -429,48 +440,48 @@ function resultView(r) {
   if (r.version === 4) {
     const notes = [];
     if (r.address !== r.network && r.prefix < 31) {
-      notes.push(h('li', { class: 'note' }, `${formatIPv4(r.address)} è un host della rete ${formatIPv4(r.network)}/${r.prefix}.`));
+      notes.push(h('li', { class: 'note' }, t('subnet.noteHostOf', { address: formatIPv4(r.address), network: `${formatIPv4(r.network)}/${r.prefix}` })));
     }
-    if (r.prefix === 31) notes.push(h('li', { class: 'note' }, 'Collegamento punto-punto (RFC 3021): entrambi gli indirizzi sono assegnabili, nessun broadcast.'));
-    if (r.prefix === 32) notes.push(h('li', { class: 'note' }, 'Host singolo (/32), tipico di loopback e route host.'));
+    if (r.prefix === 31) notes.push(h('li', { class: 'note' }, t('subnet.note31')));
+    if (r.prefix === 32) notes.push(h('li', { class: 'note' }, t('subnet.note32')));
 
     nodes.push(kvList([
-      { label: 'Indirizzo', value: formatIPv4(r.address) },
-      { label: 'Rete', value: `${formatIPv4(r.network)}/${r.prefix}`, hl: true },
-      { label: 'Maschera', value: formatIPv4(r.mask) },
-      { label: 'Wildcard', value: formatIPv4(r.wildcard) },
-      { label: 'Broadcast', value: r.broadcast == null ? '—' : formatIPv4(r.broadcast) },
-      { label: 'Primo host', value: formatIPv4(r.first) },
-      { label: 'Ultimo host', value: formatIPv4(r.last) },
-      { label: 'Host utilizzabili', value: fmtInt(r.usable), hl: true },
-      { label: 'Indirizzi totali', value: fmtInt(r.total) },
-      { label: 'Esadecimale', value: `0x${r.address.toString(16).toUpperCase().padStart(8, '0')}` },
-      { label: 'Classe', value: h('span', { class: 'mono' }, r.class) },
-      { label: 'Tipo', value: typeBadge(r.type) },
+      { label: t('subnet.address'), value: formatIPv4(r.address) },
+      { label: t('subnet.network'), value: `${formatIPv4(r.network)}/${r.prefix}`, hl: true },
+      { label: t('subnet.mask'), value: formatIPv4(r.mask) },
+      { label: t('subnet.wildcard'), value: formatIPv4(r.wildcard) },
+      { label: t('subnet.broadcast'), value: r.broadcast == null ? '—' : formatIPv4(r.broadcast) },
+      { label: t('subnet.firstHost'), value: formatIPv4(r.first) },
+      { label: t('subnet.lastHost'), value: formatIPv4(r.last) },
+      { label: t('subnet.usableHosts'), value: fmtInt(r.usable), hl: true },
+      { label: t('subnet.totalAddresses'), value: fmtInt(r.total) },
+      { label: t('subnet.hex'), value: `0x${r.address.toString(16).toUpperCase().padStart(8, '0')}` },
+      { label: t('subnet.class'), value: h('span', { class: 'mono' }, r.class) },
+      { label: t('subnet.type'), value: typeBadge(r) },
     ]));
     if (notes.length) nodes.push(h('ul', { class: 'notes' }, notes));
     nodes.push(
-      h('h3', { class: 'section-title' }, 'Rappresentazione binaria'),
+      h('h3', { class: 'section-title' }, t('subnet.binary')),
       kvList([
-        { label: 'Indirizzo', value: bitsView(r.address, r.prefix) },
-        { label: 'Maschera', value: bitsView(r.mask, r.prefix) },
+        { label: t('subnet.address'), value: bitsView(r.address, r.prefix) },
+        { label: t('subnet.mask'), value: bitsView(r.mask, r.prefix) },
       ], 'kv--compact'),
-      h('div', { class: 'bits-legend' }, h('span', null, `Rete (${r.prefix} bit)`), h('span', null, `Host (${32 - r.prefix} bit)`)),
+      h('div', { class: 'bits-legend' }, h('span', null, t('subnet.legendNet', { n: r.prefix })), h('span', null, t('subnet.legendHost', { n: 32 - r.prefix }))),
     );
   } else {
     const hostBits = 128 - r.prefix;
     nodes.push(kvList([
-      { label: 'Indirizzo', value: formatIPv6(r.address) },
-      { label: 'Espanso', value: formatIPv6Expanded(r.address) },
-      { label: 'Rete', value: `${formatIPv6(r.network)}/${r.prefix}`, hl: true },
-      { label: 'Primo indirizzo', value: formatIPv6(r.first) },
-      { label: 'Ultimo indirizzo', value: formatIPv6(r.last) },
-      { label: 'Indirizzi totali', value: [fmtInt(r.total), h('span', { class: 'sub' }, `2^${hostBits}`)], hl: true },
-      r.prefix <= 64 ? { label: 'Sottoreti /64', value: [fmtInt(1n << BigInt(64 - r.prefix)), h('span', { class: 'sub' }, `2^${64 - r.prefix}`)] } : null,
-      { label: 'Tipo', value: typeBadge(r.type) },
+      { label: t('subnet.address'), value: formatIPv6(r.address) },
+      { label: t('subnet.expanded'), value: formatIPv6Expanded(r.address) },
+      { label: t('subnet.network'), value: `${formatIPv6(r.network)}/${r.prefix}`, hl: true },
+      { label: t('subnet.firstAddress'), value: formatIPv6(r.first) },
+      { label: t('subnet.lastAddress'), value: formatIPv6(r.last) },
+      { label: t('subnet.totalAddresses'), value: [fmtInt(r.total), h('span', { class: 'sub' }, `2^${hostBits}`)], hl: true },
+      r.prefix <= 64 ? { label: t('subnet.slash64'), value: [fmtInt(1n << BigInt(64 - r.prefix)), h('span', { class: 'sub' }, `2^${64 - r.prefix}`)] } : null,
+      { label: t('subnet.type'), value: typeBadge(r) },
     ]));
     if (r.prefix > 64 && r.prefix < 127) {
-      nodes.push(h('ul', { class: 'notes' }, h('li', { class: 'note note--warn' }, 'Prefissi più lunghi di /64 non sono compatibili con SLAAC (RFC 4291).')));
+      nodes.push(h('ul', { class: 'notes' }, h('li', { class: 'note note--warn' }, t('subnet.noteSlaac'))));
     }
   }
   return nodes;
@@ -480,17 +491,17 @@ export function render(container, params, ctx) {
   const ids = { address: uid('ip'), prefix: uid('pfx'), mode: uid('mode'), value: uid('val') };
   const errors = { address: h('span', { class: 'field__error', id: `${ids.address}-err` }), prefix: h('span', { class: 'field__error', id: `${ids.prefix}-err` }), value: h('span', { class: 'field__error', id: `${ids.value}-err` }) };
 
-  const addressInput = h('input', { id: ids.address, class: 'input input--mono', type: 'text', autocomplete: 'off', spellcheck: 'false', autocapitalize: 'off', placeholder: '192.168.10.0/26 o 2001:db8::/48', 'aria-describedby': `${ids.address}-err` });
-  const prefixInput = h('input', { id: ids.prefix, class: 'input input--mono', type: 'text', autocomplete: 'off', spellcheck: 'false', placeholder: '/26 o 255.255.255.192', 'aria-describedby': `${ids.prefix}-hint ${ids.prefix}-err` });
+  const addressInput = h('input', { id: ids.address, class: 'input input--mono', type: 'text', autocomplete: 'off', spellcheck: 'false', autocapitalize: 'off', placeholder: t('subnet.addressPlaceholder'), 'aria-describedby': `${ids.address}-err` });
+  const prefixInput = h('input', { id: ids.prefix, class: 'input input--mono', type: 'text', autocomplete: 'off', spellcheck: 'false', placeholder: t('subnet.prefixPlaceholder'), 'aria-describedby': `${ids.prefix}-hint ${ids.prefix}-err` });
   const modeSelect = h('select', { id: ids.mode, class: 'input' },
-    h('option', { value: '' }, 'Nessuna'),
-    h('option', { value: 'prefix' }, 'Per nuovo prefisso'),
-    h('option', { value: 'count' }, 'Per numero di sottoreti'),
-    h('option', { value: 'hosts' }, 'Per host per sottorete'));
-  const valueLabel = h('label', { for: ids.value }, 'Valore');
+    h('option', { value: '' }, t('subnet.modeNone')),
+    h('option', { value: 'prefix' }, t('subnet.modePrefix')),
+    h('option', { value: 'count' }, t('subnet.modeCount')),
+    h('option', { value: 'hosts' }, t('subnet.modeHosts')));
+  const valueLabel = h('label', { for: ids.value }, t('subnet.value'));
   const valueInput = h('input', { id: ids.value, class: 'input input--mono', type: 'text', inputmode: 'numeric', autocomplete: 'off', 'aria-describedby': `${ids.value}-err` });
 
-  const VALUE_LABELS = { '': ['Valore', ''], prefix: ['Nuovo prefisso', 'es. 28'], count: ['Numero di sottoreti', 'es. 4'], hosts: ['Host per sottorete', 'es. 50'] };
+  const VALUE_LABELS = { '': [t('subnet.value'), ''], prefix: [t('subnet.newPrefix'), t('subnet.egPrefix')], count: [t('subnet.subnetCount'), t('subnet.egCount')], hosts: [t('subnet.hostsPerSubnet'), t('subnet.egHosts')] };
   function syncMode() {
     const [label, placeholder] = VALUE_LABELS[modeSelect.value];
     valueLabel.textContent = label;
@@ -500,33 +511,33 @@ export function render(container, params, ctx) {
   modeSelect.addEventListener('change', syncMode);
 
   const form = h('form', { novalidate: true },
-    h('div', { class: 'field' }, h('label', { for: ids.address }, 'Indirizzo IP'), addressInput, errors.address),
+    h('div', { class: 'field' }, h('label', { for: ids.address }, t('subnet.ipAddress')), addressInput, errors.address),
     h('div', { class: 'field' },
-      h('label', { for: ids.prefix }, 'Prefisso o maschera'),
+      h('label', { for: ids.prefix }, t('subnet.prefixOrMask')),
       prefixInput,
-      h('span', { class: 'field__hint', id: `${ids.prefix}-hint` }, 'Facoltativo se l’indirizzo è in notazione CIDR.'),
+      h('span', { class: 'field__hint', id: `${ids.prefix}-hint` }, t('subnet.prefixHint')),
       errors.prefix),
     h('fieldset', { class: 'group' },
-      h('legend', null, 'Suddivisione in sottoreti'),
-      h('div', { class: 'field' }, h('label', { for: ids.mode }, 'Modalità'), modeSelect),
+      h('legend', null, t('subnet.splitLegend')),
+      h('div', { class: 'field' }, h('label', { for: ids.mode }, t('subnet.mode')), modeSelect),
       h('div', { class: 'field' }, valueLabel, valueInput, errors.value)),
     h('div', { class: 'examples' },
-      h('span', { class: 'examples__label' }, 'Esempi'),
+      h('span', { class: 'examples__label' }, t('ui.examples')),
       EXAMPLES.map((ex) => h('button', { type: 'button', class: 'chip', onclick: () => { clearForm(); addressInput.value = ex; apply(); } }, ex))),
     h('div', { class: 'form-actions' },
-      h('button', { type: 'submit', class: 'btn btn--primary' }, 'Apply'),
-      h('button', { type: 'button', class: 'btn btn--secondary', onclick: () => { clearForm(); showEmpty(); ctx.setParams({}); addressInput.focus(); } }, 'Reset')));
+      h('button', { type: 'submit', class: 'btn btn--primary' }, t('ui.apply')),
+      h('button', { type: 'button', class: 'btn btn--secondary', onclick: () => { clearForm(); showEmpty(); ctx.setParams({}); addressInput.focus(); } }, t('ui.resetBtn'))));
   form.addEventListener('submit', (e) => { e.preventDefault(); apply(); });
 
-  const formDl = dashlet({ title: 'Parametri', expandable: false, onReset: () => { clearForm(); showEmpty(); ctx.setParams({}); } });
+  const formDl = dashlet({ title: t('ui.parameters'), expandable: false, onReset: () => { clearForm(); showEmpty(); ctx.setParams({}); } });
   formDl.body.append(form);
 
   let current = null;
   const resultDl = dashlet({
-    title: 'Risultato',
-    actions: [{ icon: 'copy', label: 'Copia risultato', onclick: async () => {
+    title: t('ui.result'),
+    actions: [{ icon: 'copy', label: t('subnet.copyResult'), onclick: async () => {
       if (!current) return;
-      toast((await copyText(resultAsText(current))) ? 'Risultato copiato' : 'Copia non riuscita');
+      toast((await copyText(resultAsText(current))) ? t('subnet.resultCopied') : t('ui.copyFailed'));
     } }],
     onReset: () => { showEmpty(); },
   });
@@ -534,28 +545,28 @@ export function render(container, params, ctx) {
   const table = dataTable({
     columns: [
       { key: 'index', label: '#', align: 'right' },
-      { key: 'network', label: 'Rete', mono: true, sortValue: (r) => r.sortNet },
-      { key: 'first', label: 'Primo', mono: true, sortValue: (r) => r.sortNet },
-      { key: 'last', label: 'Ultimo', mono: true, sortValue: (r) => r.sortNet },
-      { key: 'broadcast', label: 'Broadcast', mono: true, sortValue: (r) => r.sortNet },
-      { key: 'usable', label: 'Host', align: 'right', format: (r) => fmtInt(r.usable) },
+      { key: 'network', label: t('subnet.network'), mono: true, sortValue: (r) => r.sortNet },
+      { key: 'first', label: t('subnet.colFirst'), mono: true, sortValue: (r) => r.sortNet },
+      { key: 'last', label: t('subnet.colLast'), mono: true, sortValue: (r) => r.sortNet },
+      { key: 'broadcast', label: t('subnet.broadcast'), mono: true, sortValue: (r) => r.sortNet },
+      { key: 'usable', label: t('subnet.colHosts'), align: 'right', format: (r) => fmtInt(r.usable) },
     ],
-    filterPlaceholder: 'Filtra sottoreti…',
+    filterPlaceholder: t('subnet.filterSubnets'),
   });
   const table6 = dataTable({
     columns: [
       { key: 'index', label: '#', align: 'right' },
-      { key: 'network', label: 'Rete', mono: true, sortValue: (r) => r.sortNet },
-      { key: 'first', label: 'Primo indirizzo', mono: true, sortValue: (r) => r.sortNet },
-      { key: 'last', label: 'Ultimo indirizzo', mono: true, sortValue: (r) => r.sortNet },
-      { key: 'total', label: 'Indirizzi', align: 'right', format: (r) => fmtInt(r.total) },
+      { key: 'network', label: t('subnet.network'), mono: true, sortValue: (r) => r.sortNet },
+      { key: 'first', label: t('subnet.firstAddress'), mono: true, sortValue: (r) => r.sortNet },
+      { key: 'last', label: t('subnet.lastAddress'), mono: true, sortValue: (r) => r.sortNet },
+      { key: 'total', label: t('subnet.colAddresses'), align: 'right', format: (r) => fmtInt(r.total) },
     ],
-    filterPlaceholder: 'Filtra sottoreti…',
+    filterPlaceholder: t('subnet.filterSubnets'),
   });
-  const splitDl = dashlet({ title: 'Sottoreti', className: 'span-all', flush: true });
+  const splitDl = dashlet({ title: t('subnet.subnets'), className: 'span-all', flush: true });
   splitDl.el.hidden = true;
   let currentSplit = null;
-  const exportBtn = h('button', { type: 'button', class: 'btn btn--secondary', onclick: () => downloadCsv() }, 'Esporta CSV');
+  const exportBtn = h('button', { type: 'button', class: 'btn btn--secondary', onclick: () => downloadCsv() }, t('subnet.exportCsv'));
   const splitNotes = h('ul', { class: 'notes notes--flush' });
   const splitBar = h('div', { class: 'dashlet__bar' }, exportBtn, splitNotes);
 
@@ -567,12 +578,12 @@ export function render(container, params, ctx) {
     const net = (result.version === 4 ? formatIPv4(result.network) : formatIPv6(result.network)).replace(/[:.]/g, '-');
     // File generato nel browser: nessun dato viene inviato.
     const url = URL.createObjectURL(new Blob(['\ufeff', csv.text], { type: 'text/csv;charset=utf-8' }));
-    const a = h('a', { href: url, download: `sottoreti_${net}_${result.prefix}_in_${split.newPrefix}.csv` });
+    const a = h('a', { href: url, download: `${t('subnet.csvFile')}_${net}_${result.prefix}_in_${split.newPrefix}.csv` });
     document.body.append(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    toast(`Esportate ${fmtInt(csv.rows)} righe`);
+    toast(t('subnet.exported', { n: fmtInt(csv.rows) }));
   }
 
   container.append(h('div', { class: 'tool-grid' }, formDl.el, resultDl.el, splitDl.el));
@@ -601,7 +612,7 @@ export function render(container, params, ctx) {
 
   function showEmpty() {
     current = null;
-    resultDl.body.replaceChildren(h('p', { class: 'empty' }, 'Inserisci un indirizzo e premi Apply.'));
+    resultDl.body.replaceChildren(h('p', { class: 'empty' }, t('subnet.empty')));
     splitDl.el.hidden = true;
   }
 
@@ -633,19 +644,19 @@ export function render(container, params, ctx) {
   function renderSplit(result, split) {
     splitDl.el.hidden = !split;
     if (!split) return;
-    const t = result.version === 4 ? table : table6;
+    const tbl = result.version === 4 ? table : table6;
     const perNet = result.version === 4 ? split.getRow(0).usable : 1n << BigInt(128 - split.newPrefix);
-    let subtitle = `${fmtInt(split.count)} × /${split.newPrefix} · ${fmtInt(perNet)} ${result.version === 4 ? 'host' : 'indirizzi'} ciascuna`;
-    if (split.requested != null && BigInt(split.count) !== split.requested) subtitle += ` (richieste ${fmtInt(split.requested)})`;
+    let subtitle = t(result.version === 4 ? 'subnet.splitEachV4' : 'subnet.splitEachV6', { count: fmtInt(split.count), prefix: split.newPrefix, n: fmtInt(perNet) });
+    if (split.requested != null && BigInt(split.count) !== split.requested) subtitle += t('subnet.requested', { n: fmtInt(split.requested) });
     splitDl.setSubtitle(subtitle);
     const plan = splitPlan(split.count);
     currentSplit = { result, split };
-    if (plan.mode === 'full') t.setRows(Array.from({ length: split.count }, (_, i) => split.getRow(i)));
-    else t.setSource({ count: split.count, getRow: split.getRow });
+    if (plan.mode === 'full') tbl.setRows(Array.from({ length: split.count }, (_, i) => split.getRow(i)));
+    else tbl.setSource({ count: split.count, getRow: split.getRow });
     exportBtn.disabled = !plan.exportable;
-    exportBtn.title = plan.exportable ? `Scarica ${fmtInt(split.count)} righe in CSV` : `Oltre ${fmtInt(LIMITS.exportRows)} righe`;
+    exportBtn.title = plan.exportable ? t('subnet.exportTitle', { n: fmtInt(split.count) }) : t('subnet.exportOver', { n: fmtInt(LIMITS.exportRows) });
     splitNotes.replaceChildren(...plan.notes.map((n, i) => h('li', { class: `note${i === 0 && plan.mode === 'paged' ? ' note--warn' : ''}` }, n)));
-    splitDl.body.replaceChildren(splitBar, t.el);
+    splitDl.body.replaceChildren(splitBar, tbl.el);
   }
 
   // Stato iniziale: parametri dall'URL o esempio predefinito.
@@ -663,10 +674,10 @@ export function preview() {
   return {
     href: `?ip=${encodeURIComponent('192.168.10.0/26')}`,
     body: kvList([
-      { label: 'Rete', value: `${formatIPv4(r.network)}/${r.prefix}`, hl: true },
-      { label: 'Range host', value: `${formatIPv4(r.first)} – ${formatIPv4(r.last)}` },
-      { label: 'Broadcast', value: formatIPv4(r.broadcast) },
-      { label: 'Host utilizzabili', value: fmtInt(r.usable) },
+      { label: t('subnet.network'), value: `${formatIPv4(r.network)}/${r.prefix}`, hl: true },
+      { label: t('subnet.hostRange'), value: `${formatIPv4(r.first)} – ${formatIPv4(r.last)}` },
+      { label: t('subnet.broadcast'), value: formatIPv4(r.broadcast) },
+      { label: t('subnet.usableHosts'), value: fmtInt(r.usable) },
     ], 'kv--compact'),
   };
 }

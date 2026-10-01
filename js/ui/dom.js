@@ -1,3 +1,5 @@
+import { locale } from '../i18n.js';
+
 // Funzioni di supporto per il DOM. I contenuti dinamici passano sempre
 // come nodi di testo: niente innerHTML con dati inseriti dall'utente.
 
@@ -29,15 +31,20 @@ export function uid(prefix = 'id') {
   return `${prefix}-${idCounter}`;
 }
 
-const intFormat = new Intl.NumberFormat('it-IT');
-export function fmtInt(n) {
-  return intFormat.format(n);
+// Formattazione numerica nella lingua corrente (it-IT: 1.234,5 · en-GB: 1,234.5).
+const formats = new Map();
+function numberFormat(options, key) {
+  const id = `${locale()}|${key}`;
+  if (!formats.has(id)) formats.set(id, new Intl.NumberFormat(locale(), options));
+  return formats.get(id);
 }
 
-const decFormats = new Map();
+export function fmtInt(n) {
+  return numberFormat(undefined, 'int').format(n);
+}
+
 export function fmtDec(n, digits = 1) {
-  if (!decFormats.has(digits)) decFormats.set(digits, new Intl.NumberFormat('it-IT', { maximumFractionDigits: digits }));
-  return decFormats.get(digits).format(n);
+  return numberFormat({ maximumFractionDigits: digits }, `dec${digits}`).format(n);
 }
 
 export function kvList(items, className = '') {
