@@ -380,18 +380,33 @@ test('Content-Length corretto: verificato, nessun avviso', () => {
   assert.equal(parseSip(SIP_EXAMPLES.register).contentLengthCheck.status, 'verified');
 });
 
-test('Content-Length con mismatch reale: avviso arancio, mai accettato in silenzio', () => {
-  const longer = parseSip(SIP_EXAMPLES.invite.replace(/Content-Length: \d+/, 'Content-Length: 900'));
-  hasIssue(longer, 'warn', /Content-Length non corrisponde \(atteso 900, calcolato 285\)\. Il corpo è più corto/);
-  assert.equal(longer.contentLengthCheck.status, 'mismatch');
-  assert.deepEqual(issuesOf(longer, 'err'), []);
-  const shorter = parseSip(SIP_EXAMPLES.invite.replace(/Content-Length: \d+/, 'Content-Length: 250'));
-  hasIssue(shorter, 'warn', /atteso 250, calcolato 285/);
-  // prima venivano accettati in silenzio: corpo senza CRLF finale (−2) e conteggio con solo LF
-  const noFinalCrlf = parseSip(SIP_EXAMPLES.invite.replace(/Content-Length: \d+/, 'Content-Length: 283'));
-  hasIssue(noFinalCrlf, 'warn', /atteso 283, calcolato 285\)\. La differenza è di 2 byte/);
-  const lfOnly = parseSip(SIP_EXAMPLES.invite.replace(/Content-Length: \d+/, 'Content-Length: 271'));
-  hasIssue(lfOnly, 'warn', /atteso 271, calcolato 285/);
+test('Content-Length con mismatch reale: avviso arancio con atteso e calcolato', () => {
+  const withCl = (n) => parseSip(SIP_EXAMPLES.invite.replace(/Content-Length: \d+/, `Content-Length: ${n}`));
+  const clWarnings = (m) => m.issues.filter((i) => /^Content-Length non corrisponde/.test(i.message));
+  const LINE_END = ' Potrebbe mancare un fine riga nel corpo originale (CRLF finale assente o LF al posto di CRLF).';
+  const SHORT = ' Il corpo è più corto del dichiarato: un’ipotesi è che il messaggio sia troncato.';
+  const cases = [
+    // [dichiarato, testo atteso dell'avviso]
+    [900, `Content-Length non corrisponde (atteso 900, calcolato 285).${SHORT}`],
+    [286, `Content-Length non corrisponde (atteso 286, calcolato 285).${SHORT}`],
+    [250, 'Content-Length non corrisponde (atteso 250, calcolato 285).'],
+    // senza il solo CRLF finale: −2 byte, qualunque sia il numero di righe
+    [283, `Content-Length non corrisponde (atteso 283, calcolato 285).${LINE_END}`],
+    // LF al posto di CRLF: −14 byte, uno per ciascuna delle 14 righe del corpo
+    [271, `Content-Length non corrisponde (atteso 271, calcolato 285).${LINE_END}`],
+  ];
+  for (const [declared, text] of cases) {
+    const m = withCl(declared);
+    const warns = clWarnings(m);
+    assert.equal(warns.length, 1, `un solo avviso per ${declared}`);
+    assert.equal(warns[0].level, 'warn', `livello arancio per ${declared}`);
+    assert.equal(warns[0].message, text);
+    assert.deepEqual(m.contentLengthCheck, { status: 'mismatch', declared, computed: 285 });
+    assert.ok(!m.issues.some((i) => i.level === 'err' && /Content-Length/.test(i.message)), `nessun errore per ${declared}`);
+  }
+  // l'indizio sul fine riga non è legato ai 2 byte: un corpo di una sola riga
+  const oneLine = parseSip('MESSAGE sip:a@x SIP/2.0\nVia: SIP/2.0/UDP 192.0.2.1;branch=z9hG4bK1\nMax-Forwards: 70\nFrom: <sip:b@x>;tag=1\nTo: <sip:a@x>\nCall-ID: 1\nCSeq: 1 MESSAGE\nContent-Type: text/plain\nContent-Length: 4\n\nciao');
+  assert.equal(clWarnings(oneLine)[0].message, `Content-Length non corrisponde (atteso 4, calcolato 6).${LINE_END}`);
 });
 
 test('header compatti, continuazione su più righe e righe di log iniziali', () => {

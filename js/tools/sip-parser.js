@@ -411,9 +411,12 @@ export function parseSip(text) {
         msg.contentLengthCheck = { status: 'verified', declared, computed: msg.bodyBytes };
       } else {
         msg.contentLengthCheck = { status: 'mismatch', declared, computed: msg.bodyBytes };
-        const hint = declared === msg.bodyBytes - 2 && bodyLines.length
-          ? ' La differenza è di 2 byte: il corpo originale potrebbe non terminare con CRLF.'
-          : declared > msg.bodyBytes ? ' Il corpo è più corto del dichiarato: messaggio forse troncato.' : '';
+        // Indizi, non diagnosi. Senza il solo CRLF finale lo scarto è 2 byte; con LF al
+        // posto di CRLF è pari al numero di righe del corpo.
+        const gap = msg.bodyBytes - declared;
+        const hint = gap > 0 && (gap === 2 || gap === bodyLines.length)
+          ? ' Potrebbe mancare un fine riga nel corpo originale (CRLF finale assente o LF al posto di CRLF).'
+          : gap < 0 ? ' Il corpo è più corto del dichiarato: un’ipotesi è che il messaggio sia troncato.' : '';
         add('warn', 'body', `Content-Length non corrisponde (atteso ${declared}, calcolato ${msg.bodyBytes}).${hint}`);
       }
     }
