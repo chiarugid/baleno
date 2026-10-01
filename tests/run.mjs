@@ -8,6 +8,7 @@ import { findCode, filterCodes, q850For, reasonHeader, codeClass } from '../js/t
 import { SIP_CODES, Q850, SIP_TO_Q850, Q850_TO_SIP } from '../data/sip-codes.js';
 import { dscpInfo, parseValue, findPoint, TABLE_ROWS } from '../js/tools/dscp.js';
 import { emodel, rToMos, delayImpairment, effectiveIe, oneWayDelay, category, R0 } from '../js/tools/mos.js';
+import { parsePattern, matchPattern, testPattern, applyMask, patternCount } from '../js/tools/cucm.js';
 import { dbmToMw, mwToDbm, eirp, fspl, linkBudget, bandCheck, parseNumber, formatPower, formatDistance } from '../js/tools/rf-power.js';
 import { parseMac, formatMac, lookupVendor, macInfo, specialAddress, eui64LinkLocal, extractMacs, OUI_COUNT } from '../js/tools/mac.js';
 
@@ -913,6 +914,95 @@ test('input non validi', () => {
   assert.equal(emodel({ codec: 'gsm' }).ok, false);
   assert.equal(emodel({ delayMs: -1 }).field, 'delay');
   assert.equal(emodel({ lossPct: 101 }).field, 'loss');
+});
+
+console.log('Pattern CUCM');
+
+test('9.[2-9]XXXXXXXXX con PreDot su 94085551234 → 4085551234', () => {
+  const r = testPattern({ pattern: '9.[2-9]XXXXXXXXX', dialed: '94085551234', discard: 'predot' });
+  assert.equal(r.match, true);
+  assert.equal(r.preDot, '9');
+  assert.equal(r.result, '4085551234');
+  assert.equal(r.steps[0].rule, 'Discard Digits: PreDot');
+});
+
+test('914085551234 non combacia con 9.[2-9]XXXXXXXXX; serve 91.[2-9]XXXXXXXXX', () => {
+  const no = testPattern({ pattern: '9.[2-9]XXXXXXXXX', dialed: '914085551234', discard: 'predot' });
+  assert.equal(no.match, false);
+  assert.equal(no.partial, false);
+  assert.match(no.reason, /posizione 2 la cifra "1" non è ammessa da \[2-9\]/);
+  const yes = testPattern({ pattern: '91.[2-9]XXXXXXXXX', dialed: '914085551234', discard: 'predot' });
+  assert.equal(yes.result, '4085551234');
+});
+
+test('non-match: parziale (servono cifre), troppo lungo, cifra esclusa', () => {
+  const partial = testPattern({ pattern: '9.[2-9]XXXXXXXXX', dialed: '9408555123' });
+  assert.equal(partial.match, false);
+  assert.equal(partial.partial, true);
+  const long = testPattern({ pattern: '9.[2-9]XXXXXXXXX', dialed: '940855512345' });
+  assert.equal(long.match, false);
+  assert.equal(long.partial, false);
+  assert.match(long.reason, /più lungo del pattern/);
+  assert.equal(testPattern({ pattern: '[^0]XX', dialed: '055' }).match, false);
+  assert.equal(testPattern({ pattern: '[^0]XX', dialed: '155' }).match, true);
+});
+
+test('maschera di trasformazione allineata a destra', () => {
+  assert.equal(applyMask('5551234', '408XXXXXXX'), '4085551234');
+  assert.equal(applyMask('5551234', 'XXXX'), '1234');
+  assert.equal(applyMask('4123', '+390612XXXX'), '+3906124123');
+  assert.equal(applyMask('12', 'XXXX'), '12');
+  assert.equal(applyMask('1234', ''), '1234');
+  const r = testPattern({ pattern: '4XXX', dialed: '4123', mask: '+390612XXXX' });
+  assert.equal(r.result, '+3906124123');
+});
+
+test('ordine: discard, strip, maschera, prefisso', () => {
+  const r = testPattern({ pattern: '0.XXXXXXX', dialed: '05551234', discard: 'predot', strip: 1, mask: '9XXXXXX', prefix: '00' });
+  assert.deepEqual(r.steps.map((s) => s.after), ['5551234', '551234', '9551234', '009551234']);
+  assert.equal(r.result, '009551234');
+  const s = testPattern({ pattern: '\\+39!', dialed: '+390612345678', strip: 3 });
+  assert.equal(s.result, '0612345678');
+});
+
+test('9.!# con PreDot Trailing-#', () => {
+  const r = testPattern({ pattern: '9.!#', dialed: '900390612345678#', discard: 'predot-trailing' });
+  assert.equal(r.match, true);
+  assert.equal(r.result, '00390612345678');
+  assert.equal(r.variable, true);
+  assert.equal(r.count, null);
+  assert.equal(testPattern({ pattern: '9.!#', dialed: '9123', discard: 'predot-trailing' }).partial, true, 'manca il #');
+});
+
+test('quantificatori ? e +, \\+ letterale', () => {
+  assert.equal(testPattern({ pattern: '5X?', dialed: '5' }).match, true);
+  assert.equal(testPattern({ pattern: '5X?', dialed: '5123' }).match, true);
+  assert.equal(testPattern({ pattern: '5X+', dialed: '5' }).match, false);
+  assert.equal(testPattern({ pattern: '1+', dialed: '111' }).match, true);
+  assert.equal(testPattern({ pattern: '\\+1!', dialed: '+1408' }).match, true);
+  assert.equal(testPattern({ pattern: '\\+1!', dialed: '1408' }).match, false);
+  assert.equal(testPattern({ pattern: '*67XXXX', dialed: '*671234' }).match, true);
+});
+
+test('numeri coperti dal pattern', () => {
+  assert.equal(patternCount(parsePattern('9.[2-9]XXXXXXXXX').tokens), 8000000000n);
+  assert.equal(patternCount(parsePattern('4XXX').tokens), 1000n);
+  assert.equal(patternCount(parsePattern('[^0]XX').tokens), 900n);
+  assert.equal(patternCount(parsePattern('9.!').tokens), null);
+});
+
+test('pattern non validi e macro @ non supportata', () => {
+  const at = testPattern({ pattern: '9.@', dialed: '914085551234' });
+  assert.equal(at.ok, false);
+  assert.equal(at.unsupported, true);
+  assert.equal(parsePattern('9..XX').ok, false);
+  assert.equal(parsePattern('[2-9XX').ok, false);
+  assert.equal(parsePattern('[9-2]').ok, false);
+  assert.equal(parsePattern('ABC').ok, false);
+  assert.equal(parsePattern('?1').ok, false);
+  assert.equal(testPattern({ pattern: 'XXXX', dialed: '1234', discard: 'predot' }).field, 'discard');
+  assert.equal(testPattern({ pattern: 'XXXX', dialed: '12a4' }).field, 'dialed');
+  assert.equal(testPattern({ pattern: 'XXXX', dialed: '1234', mask: '12Y' }).field, 'mask');
 });
 
 console.log(`\n${passed} superati, ${failed} falliti`);

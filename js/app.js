@@ -44,6 +44,12 @@ const TOOLS = [
     load: () => import('./tools/mos.js'),
   },
   {
+    id: 'pattern', section: 'voce', title: 'Tester pattern CUCM',
+    description: 'Verifica se un route o translation pattern combacia con un numero e mostra le trasformazioni passo per passo.',
+    keywords: 'cucm call manager route pattern translation pattern predot discard digits transform mask prefisso wildcard dial plan',
+    load: () => import('./tools/cucm.js'),
+  },
+  {
     id: 'dscp', section: 'qos', title: 'Tabella DSCP',
     description: 'DSCP, CoS, ToS e PHB in decimale, binario ed esadecimale, con ricerca.',
     keywords: 'dscp cos tos phb ef af cs qos marcatura precedenza ecn traffic class 802.1p',
