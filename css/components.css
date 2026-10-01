@@ -97,8 +97,7 @@
   overflow: auto;
   box-shadow: var(--shadow-lg);
 }
-.has-max::after {
-  content: '';
+.dashlet-backdrop {
   position: fixed;
   inset: 0;
   z-index: 35;

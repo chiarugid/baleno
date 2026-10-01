@@ -88,13 +88,18 @@ function updateNav(sectionId, toolId) {
 function setNavOpen(open) {
   root.classList.toggle('nav-open', open);
   scrim.hidden = !open;
-  navToggle.setAttribute('aria-expanded', String(open));
+  if (mqMobile.matches) {
+    navToggle.setAttribute('aria-expanded', String(open));
+    navToggle.setAttribute('aria-label', open ? 'Chiudi menu' : 'Apri menu');
+    navToggle.title = navToggle.getAttribute('aria-label');
+  }
 }
 
 function syncToggleState() {
   if (mqMobile.matches) {
-    navToggle.setAttribute('aria-expanded', String(root.classList.contains('nav-open')));
-    navToggle.setAttribute('aria-label', 'Apri menu');
+    const open = root.classList.contains('nav-open');
+    navToggle.setAttribute('aria-expanded', String(open));
+    navToggle.setAttribute('aria-label', open ? 'Chiudi menu' : 'Apri menu');
   } else {
     setNavOpen(false);
     const collapsed = root.classList.contains('sidebar-collapsed');

@@ -46,24 +46,38 @@ function onKey(event) {
   if (event.key === 'Escape') closeMaximized();
 }
 
+// Sfondo dietro la dashlet espansa: chiude solo se pressione e rilascio
+// avvengono entrambi sullo sfondo (un trascinamento dalla card non chiude).
+function createBackdrop() {
+  const backdrop = h('div', { class: 'dashlet-backdrop', 'aria-hidden': 'true' });
+  let pressedOnBackdrop = false;
+  backdrop.addEventListener('pointerdown', (e) => { pressedOnBackdrop = e.target === backdrop; });
+  backdrop.addEventListener('click', (e) => {
+    if (pressedOnBackdrop && e.target === backdrop) closeMaximized();
+    pressedOnBackdrop = false;
+  });
+  return backdrop;
+}
+
 function toggleMaximize(el, btn) {
   if (maximized?.el === el) {
     closeMaximized();
     return;
   }
   closeMaximized();
+  const backdrop = createBackdrop();
+  document.body.append(backdrop);
   el.classList.add('is-max');
-  document.body.classList.add('has-max');
   setButton(btn, 'shrink', 'Riduci');
-  maximized = { el, btn };
+  maximized = { el, btn, backdrop };
   document.addEventListener('keydown', onKey);
 }
 
 export function closeMaximized() {
   if (!maximized) return;
   maximized.el.classList.remove('is-max');
+  maximized.backdrop.remove();
   setButton(maximized.btn, 'expand', 'Espandi');
-  document.body.classList.remove('has-max');
   document.removeEventListener('keydown', onKey);
   maximized = null;
 }
