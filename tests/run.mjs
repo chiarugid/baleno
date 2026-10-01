@@ -7,6 +7,7 @@ import { parseSip, EXAMPLES as SIP_EXAMPLES } from '../js/tools/sip-parser.js';
 import { findCode, filterCodes, q850For, reasonHeader, codeClass } from '../js/tools/sip-codes.js';
 import { SIP_CODES, Q850, SIP_TO_Q850, Q850_TO_SIP } from '../data/sip-codes.js';
 import { dscpInfo, parseValue, findPoint, TABLE_ROWS } from '../js/tools/dscp.js';
+import { emodel, rToMos, delayImpairment, effectiveIe, oneWayDelay, category, R0 } from '../js/tools/mos.js';
 import { dbmToMw, mwToDbm, eirp, fspl, linkBudget, bandCheck, parseNumber, formatPower, formatDistance } from '../js/tools/rf-power.js';
 import { parseMac, formatMac, lookupVendor, macInfo, specialAddress, eui64LinkLocal, extractMacs, OUI_COUNT } from '../js/tools/mac.js';
 
@@ -829,6 +830,67 @@ test('input numerici e formattazione', () => {
   assert.equal(formatPower(dbmToMw(-67)), '199,526 pW');
   assert.equal(formatDistance(0.05), '50 m');
   assert.equal(formatDistance(1.5), '1,5 km');
+});
+
+console.log('MOS (E-model)');
+
+test('G.711 in condizioni ideali: R ≈ 93, MOS ≈ 4,4', () => {
+  const m = emodel({ codec: 'g711', delayMs: 20, lossPct: 0 });
+  near(m.r, 92.72, 0.01);
+  near(m.mos, 4.40, 0.01);
+  assert.equal(m.category.label, 'Eccellente');
+  near(emodel({ codec: 'g711', delayMs: 0, lossPct: 0 }).r, R0, 1e-12);
+});
+
+test('formula MOS e limiti', () => {
+  near(rToMos(R0), 4.41, 0.005);
+  near(rToMos(50), 2.58, 0.005);
+  assert.equal(rToMos(0), 1);
+  assert.equal(rToMos(-10), 1);
+  assert.equal(rToMos(100), 4.5);
+  assert.equal(rToMos(120), 4.5);
+});
+
+test('perdita: Ie,eff = Ie + (95 − Ie)·Ppl/(Ppl + Bpl)', () => {
+  near(effectiveIe(11, 19, 1), 11 + 84 / 20, 1e-12);
+  near(effectiveIe(0, 25.1, 0), 0, 1e-12);
+  near(effectiveIe(0, 25.1, 5), 95 * 5 / 30.1, 1e-12);
+});
+
+test('G.729A con 1% di perdita: MOS inferiore a G.711', () => {
+  const g711 = emodel({ codec: 'g711', delayMs: 100, lossPct: 1 });
+  const g729 = emodel({ codec: 'g729a', delayMs: 100, lossPct: 1 });
+  near(g729.ieEff, 15.2, 1e-9);
+  assert.ok(g729.mos < g711.mos);
+  assert.ok(g729.mos < emodel({ codec: 'g729a', delayMs: 100, lossPct: 0 }).mos);
+  near(g729.r, 93.2 - 2.4 - 15.2, 1e-9);
+});
+
+test('ritardo: Id e soglia G.114 a 150 ms', () => {
+  near(delayImpairment(100), 2.4, 1e-12);
+  near(delayImpairment(177.3), 4.2552, 1e-9);
+  near(delayImpairment(300), 0.024 * 300 + 0.11 * 122.7, 1e-9);
+  assert.equal(emodel({ delayMs: 150 }).overG114, false);
+  assert.equal(emodel({ delayMs: 151 }).overG114, true);
+  assert.equal(oneWayDelay({ network: 40, jitterBuffer: 40, packetization: 20 }), 100);
+});
+
+test('fattore A, categorie G.109 e codec stimati', () => {
+  near(emodel({ delayMs: 400, lossPct: 3, advantage: 20 }).r - emodel({ delayMs: 400, lossPct: 3 }).r, 20, 1e-9);
+  assert.equal(category(95).label, 'Eccellente');
+  assert.equal(category(85).label, 'Buono');
+  assert.equal(category(75).label, 'Discreto');
+  assert.equal(category(65).label, 'Scarso');
+  assert.equal(category(40).label, 'Pessimo');
+  assert.equal(emodel({ codec: 'opus', bitrate: 16 }).ie, 6);
+  assert.equal(emodel({ codec: 'opus', bitrate: 16 }).codec.estimate, true);
+  assert.equal(emodel({ codec: 'g7231' }).ie, 15);
+});
+
+test('input non validi', () => {
+  assert.equal(emodel({ codec: 'gsm' }).ok, false);
+  assert.equal(emodel({ delayMs: -1 }).field, 'delay');
+  assert.equal(emodel({ lossPct: 101 }).field, 'loss');
 });
 
 console.log(`\n${passed} superati, ${failed} falliti`);

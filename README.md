@@ -7,6 +7,7 @@ Strumenti di rete e VoIP che girano interamente nel browser, pubblicati su [www.
 - **Parser SIP**: start line, header (anche compatti), SDP con codec e media, anomalie comuni
 - **Codici di risposta SIP**: tutti i codici 1xx–6xx con significato, RFC e mappatura Q.850 (RFC 3398)
 - **Tabella DSCP/CoS/ToS** con PHB, classe di servizio e uso tipico, più convertitore DSCP ↔ ToS ↔ IP Precedence
+- **Stima MOS (E-model)**: fattore R e MOS secondo ITU-T G.107 da codec, ritardo one-way (anche per componenti), perdita e fattore A; categorie G.109 e soglia G.114
 - **dBm / mW / EIRP**: conversioni di potenza, EIRP con limiti ETSI indicativi, budget di collegamento in spazio libero (FSPL, margine, distanza massima)
 - **Convertitore MAC**: formati Cisco, due punti, trattini, senza separatori; produttore da un sottoinsieme OUI locale; indirizzi speciali (HSRP, VRRP, multicast…); conversione multipla
 

@@ -38,6 +38,12 @@ const TOOLS = [
     load: () => import('./tools/sip-codes.js'),
   },
   {
+    id: 'mos', section: 'voce', title: 'Stima MOS (E-model)',
+    description: 'Fattore R e MOS secondo ITU-T G.107 da codec, ritardo one-way, perdita di pacchetti e fattore di vantaggio.',
+    keywords: 'mos e-model g.107 fattore r qualità voce ritardo jitter perdita pacchetti g.114 g.109 ie bpl',
+    load: () => import('./tools/mos.js'),
+  },
+  {
     id: 'dscp', section: 'qos', title: 'Tabella DSCP',
     description: 'DSCP, CoS, ToS e PHB in decimale, binario ed esadecimale, con ricerca.',
     keywords: 'dscp cos tos phb ef af cs qos marcatura precedenza ecn traffic class 802.1p',
