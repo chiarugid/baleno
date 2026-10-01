@@ -1396,5 +1396,59 @@ test('in inglese i messaggi degli strumenti non contengono italiano', () => {
   assert.equal(calc('').error, 'Inserisci un indirizzo IP.', 'ritorno all’italiano');
 });
 
+console.log('Contatore visite (locale)');
+
+const { countVisit, VISITS_KEY, SESSION_KEY } = await import('../js/visits.js');
+
+// Archivio finto con la stessa interfaccia di localStorage/sessionStorage.
+function fakeStorage(initial = {}, { failSet = false, failGet = false } = {}) {
+  const data = { ...initial };
+  return {
+    data,
+    getItem(k) { if (failGet) throw new Error('bloccato'); return k in data ? data[k] : null; },
+    setItem(k, v) { if (failSet) throw new Error('pieno'); data[k] = String(v); },
+  };
+}
+
+test('prima visita: 1, salvata in localStorage con la chiave rebluc.visits', () => {
+  const local = fakeStorage();
+  const session = fakeStorage();
+  assert.equal(VISITS_KEY, 'rebluc.visits');
+  assert.equal(countVisit(local, session), 1);
+  assert.equal(local.data[VISITS_KEY], '1');
+  assert.equal(session.data[SESSION_KEY], '1');
+});
+
+test('stessa sessione (ricarica o cambio pagina): nessun incremento', () => {
+  const local = fakeStorage();
+  const session = fakeStorage();
+  assert.equal(countVisit(local, session), 1);
+  assert.equal(countVisit(local, session), 1);
+  assert.equal(countVisit(local, session), 1);
+  assert.equal(local.data[VISITS_KEY], '1');
+});
+
+test('nuova sessione: +1 sul totale salvato', () => {
+  const local = fakeStorage({ [VISITS_KEY]: '41' });
+  assert.equal(countVisit(local, fakeStorage()), 42);
+  assert.equal(countVisit(local, fakeStorage()), 43, 'altra sessione');
+});
+
+test('assenza o guasti di localStorage: contatore nascosto, nessun errore', () => {
+  assert.equal(countVisit(null, fakeStorage()), null, 'localStorage assente');
+  assert.equal(countVisit(fakeStorage({}, { failGet: true }), fakeStorage()), null, 'lettura bloccata');
+  assert.equal(countVisit(fakeStorage({}, { failSet: true }), fakeStorage()), null, 'scrittura impossibile');
+});
+
+test('valori corrotti e sessionStorage assente', () => {
+  assert.equal(countVisit(fakeStorage({ [VISITS_KEY]: 'abc' }), fakeStorage()), 1);
+  assert.equal(countVisit(fakeStorage({ [VISITS_KEY]: '-5' }), fakeStorage()), 1);
+  const local = fakeStorage();
+  // senza sessionStorage ogni caricamento conta, ma non si interrompe
+  assert.equal(countVisit(local, null), 1);
+  assert.equal(countVisit(local, null), 2);
+  assert.equal(countVisit(local, fakeStorage({}, { failGet: true, failSet: true })), 3);
+});
+
 console.log(`\n${passed} superati, ${failed} falliti`);
 process.exit(failed ? 1 : 0);

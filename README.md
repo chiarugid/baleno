@@ -22,6 +22,10 @@ Interfaccia in italiano e inglese (selettore IT/EN nell'header). Tutte le string
 2. preferenza salvata nel browser (`localStorage`, chiave `rebluc.lang`);
 3. italiano come predefinito.
 
+## Contatore visite
+
+In alto a destra (nel menu su mobile) un contatore discreto mostra le visite **di questo browser**: il totale sta in `localStorage` (chiave `rebluc.visits`) e aumenta una volta per sessione (`sessionStorage`), non a ogni cambio di pagina. Nessuna richiesta di rete: non è un conteggio dei visitatori del sito. Se il browser blocca `localStorage` il contatore non compare.
+
 ## Avvio in locale
 
 Il sito usa moduli ES, quindi va servito via HTTP (aprire `index.html` con doppio clic non funziona):
@@ -55,6 +59,7 @@ index.html     pagina unica (sidebar, header, breadcrumb, contenuti)
 css/           tema (tokens), layout, componenti
 js/app.js      navigazione, tema, lingua, ricerca strumenti
 js/i18n.js     dizionario italiano/inglese e funzioni t()
+js/visits.js   contatore visite locale
 js/ui/         componenti condivisi (dashlet, tabella, icone)
 js/tools/      un modulo per strumento: funzioni di calcolo + interfaccia
 data/          tabelle statiche

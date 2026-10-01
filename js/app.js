@@ -1,9 +1,10 @@
 // Avvio: navigazione (routing con #), sidebar, tema, lingua, ricerca strumenti.
 
-import { h, badge } from './ui/dom.js';
+import { h, badge, fmtInt } from './ui/dom.js';
 import { icon } from './ui/icons.js';
 import { dashlet, closeMaximized } from './ui/dashlet.js';
 import { t, tAll, getLang, setLang, resolveLang, isLang } from './i18n.js';
+import { countVisit, browserStorage } from './visits.js';
 
 const SECTIONS = [
   { id: 'indirizzamento', icon: 'network' },
@@ -58,6 +59,20 @@ function applyStaticText() {
     }
   }
   for (const btn of document.querySelectorAll('[data-lang]')) btn.setAttribute('aria-pressed', String(btn.dataset.lang === getLang()));
+}
+
+// ---------------------------------------------------------------- Contatore visite
+
+// Conta una volta per sessione, all'avvio; i cambi di pagina interni non incrementano.
+const visitCount = countVisit(browserStorage('localStorage'), browserStorage('sessionStorage'));
+
+function renderVisits() {
+  for (const el of document.querySelectorAll('[data-visits]')) {
+    el.hidden = visitCount == null;
+    if (visitCount == null) continue;
+    el.textContent = t('app.visits', { n: fmtInt(visitCount) });
+    el.title = t('app.visitsTitle');
+  }
 }
 
 // ---------------------------------------------------------------- Sidebar
@@ -174,6 +189,7 @@ function syncLangInUrl() {
 // Ricostruisce tutto ciò che contiene testo: statici, sidebar, pagina corrente.
 function refreshLanguage() {
   applyStaticText();
+  renderVisits();
   buildNav();
   syncToggleState();
   syncThemeButton();
@@ -432,6 +448,7 @@ async function route({ focus = true } = {}) {
 
 setLang(resolveLang(parseHash().params.get('lang'), read(LANG_KEY)));
 applyStaticText();
+renderVisits();
 buildNav();
 syncToggleState();
 syncThemeButton();
