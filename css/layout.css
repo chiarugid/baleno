@@ -215,6 +215,17 @@ h1, h2, h3 { margin: 0; line-height: 1.3; }
   font-size: var(--fs-xs);
   white-space: nowrap;
 }
+.sidebar__foot > span { display: block; }
+.sidebar__mail {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--sidebar-text);
+}
+.sidebar__mail .icon { width: 14px; height: 14px; }
+.sidebar__mail:hover { color: var(--sidebar-text-strong); }
+.sidebar__mail:focus-visible { box-shadow: var(--focus-ring); }
 
 .sidebar-collapsed .nav__link { padding: 0; justify-content: center; }
 .sidebar-collapsed .nav__label,
