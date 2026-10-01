@@ -614,6 +614,50 @@ test('session timer: refresher mancante in azzurro, Session-Expires < Min-SE in 
   assert.equal(hasSbcHeaders(parseSip(SIP_EXAMPLES.invite).sbc), false);
 });
 
+const timerIssues = (m) => m.issues.filter((i) => /Session-Expires|refresher/.test(i.message));
+const inviteWithTimer = (lines) => parseSip([
+  'INVITE sip:a@example.com SIP/2.0', 'Via: SIP/2.0/UDP 192.0.2.1:5060;branch=z9hG4bK1', 'Max-Forwards: 70',
+  'From: <sip:b@example.com>;tag=1', 'To: <sip:a@example.com>', 'Call-ID: t@example.com', 'CSeq: 1 INVITE',
+  'Contact: <sip:b@192.0.2.1>', 'Supported: timer', ...lines, 'Content-Length: 0',
+].join('\n'));
+
+test('refresher: azzurro se assente in un INVITE, arancio solo se presente e diverso da uac/uas', () => {
+  const absent = timerIssues(inviteWithTimer(['Session-Expires: 1800', 'Min-SE: 90']));
+  assert.equal(absent.length, 1);
+  assert.equal(absent[0].level, 'info');
+  assert.equal(absent[0].message, 'Session-Expires 1800 s senza refresher indicato: lo sceglierà lo UAS nella risposta (RFC 4028).');
+  for (const r of ['uac', 'uas', 'UAC']) {
+    assert.deepEqual(timerIssues(inviteWithTimer([`Session-Expires: 1800;refresher=${r}`, 'Min-SE: 90'])), [], `refresher=${r}`);
+  }
+  for (const r of ['caller', 'callee', 'x']) {
+    const issues = timerIssues(inviteWithTimer([`Session-Expires: 1800;refresher=${r}`, 'Min-SE: 90']));
+    assert.equal(issues.length, 1, `refresher=${r}`);
+    assert.equal(issues[0].level, 'warn');
+    assert.equal(issues[0].message, `Session-Expires: refresher "${r}" non valido, ammessi uac o uas.`);
+  }
+});
+
+test('Min-SE implicito 90 s: avviso solo se Session-Expires < 90', () => {
+  assert.deepEqual(timerIssues(inviteWithTimer(['Session-Expires: 1800;refresher=uac'])), [], '1800 s senza Min-SE: nulla');
+  assert.deepEqual(timerIssues(inviteWithTimer(['Session-Expires: 90;refresher=uac'])), [], '90 s senza Min-SE: nulla');
+  const low = timerIssues(inviteWithTimer(['Session-Expires: 89;refresher=uac']));
+  assert.equal(low.length, 1);
+  assert.equal(low[0].level, 'warn');
+  assert.equal(low[0].message, 'Session-Expires 89 s inferiore a Min-SE 90 s (minimo predefinito RFC 4028): la controparte può rispondere 422 Session Interval Too Small.');
+  // con Min-SE esplicito vale quello, non il 90 implicito
+  assert.deepEqual(timerIssues(inviteWithTimer(['Session-Expires: 60;refresher=uac', 'Min-SE: 30'])), []);
+  assert.equal(timerIssues(inviteWithTimer(['Session-Expires: 600;refresher=uac', 'Min-SE: 1200']))[0].level, 'warn');
+});
+
+test('INVITE senza header SBC: nessun riquadro', () => {
+  for (const key of ['invite', 'ok200', 'register', 'anomalie']) {
+    const m = parseSip(SIP_EXAMPLES[key]);
+    assert.equal(hasSbcHeaders(m.sbc), false, key);
+    assert.deepEqual(m.sbc, { pai: [], ppi: [], diversion: [], historyInfo: [], reason: [], timer: null }, key);
+  }
+  assert.equal(hasSbcHeaders(parseSip(SIP_EXAMPLES.bye).sbc), true, 'il solo Reason basta a mostrarlo');
+});
+
 test('telephone-event senza fmtp in azzurro; eventi descritti', () => {
   const noFmtp = parseSip(SIP_EXAMPLES.sbc.replace('a=fmtp:101 0-15\n', ''));
   hasIssue(noFmtp, 'info', /telephone-event \(PT 101\) senza a=fmtp: per RFC 4733 si assumono gli eventi DTMF 0-15/);
