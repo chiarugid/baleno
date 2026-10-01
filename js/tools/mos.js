@@ -9,8 +9,10 @@ import { EMODEL_CODECS, ADVANTAGE, CATEGORIES } from '../../data/emodel.js';
 export const R0 = 93.2;
 export const G114_LIMIT = 150;
 
-// Degrado da ritardo one-way (ms): approssimazione di Cole e Rosenbluth dell'Id
-// di G.107 con i parametri di default (eco controllato).
+// Degrado da ritardo one-way (ms): Id ≈ 0,024·d + 0,11·(d − 177,3)·H(d − 177,3),
+// approssimazione dell'Id di G.107 con i parametri di default da R. G. Cole e
+// J. H. Rosenbluth, "Voice over IP Performance Monitoring", ACM SIGCOMM CCR 31(2), 2001.
+// H è il gradino: il secondo termine vale 0 fino a 177,3 ms e non è mai negativo.
 export function delayImpairment(oneWayMs) {
   const d = Math.max(0, oneWayMs);
   return 0.024 * d + (d > 177.3 ? 0.11 * (d - 177.3) : 0);
@@ -120,7 +122,7 @@ function resultView(m, delayParts) {
   else if (m.overG114) notes.push(h('li', { class: 'note note--warn' }, badge('G.114', 'warn'), ` Ritardo one-way di ${fmtDec(m.delayMs, 0)} ms, oltre i 150 ms raccomandati: la conversazione diventa meno interattiva.`));
   if (m.codec.estimate) notes.push(h('li', { class: 'note note--warn' }, badge('stima', 'warn'), ` ${m.codec.name}: ${m.codec.source}.`));
   if (m.r < 50) notes.push(h('li', { class: 'note note--err' }, 'R sotto 50: qualità non raccomandata (G.109).'));
-  notes.push(h('li', { class: 'note' }, 'Ipotesi: perdita casuale (BurstR = 1), Is = 0, Id secondo l’approssimazione di Cole e Rosenbluth dei valori di default G.107. È una stima di pianificazione, non una misura.'));
+  notes.push(h('li', { class: 'note' }, 'Ipotesi: perdita casuale (BurstR = 1), Is = 0, Id ≈ 0,024·d + 0,11·(d − 177,3) oltre 177,3 ms (approssimazione dell’Id di G.107 di Cole e Rosenbluth, ACM SIGCOMM CCR 2001). È una stima di pianificazione, non una misura.'));
   nodes.push(h('ul', { class: 'notes' }, notes));
   return nodes;
 }

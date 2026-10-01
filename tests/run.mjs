@@ -875,6 +875,28 @@ test('ritardo: Id e soglia G.114 a 150 ms', () => {
   assert.equal(oneWayDelay({ network: 40, jitterBuffer: 40, packetization: 20 }), 100);
 });
 
+test('basso ritardo: il termine oltre 177,3 ms è zero, mai negativo', () => {
+  // con d ≤ 177,3 ms resta solo 0,024·d
+  assert.equal(delayImpairment(100), 0.024 * 100);
+  assert.equal(delayImpairment(177.3), 0.024 * 177.3);
+  for (const d of [0, 1, 50, 100, 150, 177]) assert.equal(delayImpairment(d), 0.024 * d, `${d} ms`);
+  const m = emodel({ codec: 'g711', delayMs: 100, lossPct: 0 });
+  near(m.id, 2.4, 1e-12);
+  near(m.r, 90.8, 1e-9);
+  near(m.mos, 4.36, 0.005);
+  // oltre la soglia il termine aggiuntivo cresce in modo continuo da zero
+  near(delayImpairment(177.4) - 0.024 * 177.4, 0.11 * 0.1, 1e-9);
+});
+
+test('G.711 0% a 150 ms: R ≈ 89,6, MOS ≈ 4,33', () => {
+  const m = emodel({ codec: 'g711', delayMs: 150, lossPct: 0 });
+  near(m.id, 3.6, 1e-12);
+  near(m.r, 89.6, 1e-9);
+  near(m.mos, 4.33, 0.005);
+  assert.equal(m.category.label, 'Buono');
+  assert.equal(m.overG114, false);
+});
+
 test('fattore A, categorie G.109 e codec stimati', () => {
   near(emodel({ delayMs: 400, lossPct: 3, advantage: 20 }).r - emodel({ delayMs: 400, lossPct: 3 }).r, 20, 1e-9);
   assert.equal(category(95).label, 'Eccellente');
