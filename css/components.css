@@ -177,7 +177,7 @@ fieldset.group legend { padding: 0 6px; font-size: var(--fs-sm); font-weight: 60
 
 .kv {
   display: grid;
-  grid-template-columns: minmax(130px, max-content) minmax(0, 1fr);
+  grid-template-columns: minmax(110px, max-content) minmax(0, 1fr);
   margin: 0;
 }
 .kv dt, .kv dd {
@@ -185,13 +185,13 @@ fieldset.group legend { padding: 0 6px; font-size: var(--fs-sm); font-weight: 60
   padding: 7px 0;
   border-bottom: 1px solid var(--border);
 }
-.kv dt { padding-right: 20px; color: var(--text-muted); font-size: var(--fs-sm); }
+.kv dt { padding-right: 16px; color: var(--text-muted); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .kv dd { font-family: var(--font-mono); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .kv dt:last-of-type, .kv dd:last-of-type { border-bottom: 0; }
 .kv .hl { color: var(--accent-text); font-weight: 650; }
 .kv .sub { color: var(--text-muted); font-family: var(--font-sans); margin-left: 6px; }
 
-.kv--compact dt, .kv--compact dd { padding: 4px 0; }
+.kv--compact dt, .kv--compact dd { padding-top: 4px; padding-bottom: 4px; }
 
 .mono { font-family: var(--font-mono); font-size: var(--fs-sm); }
 .muted { color: var(--text-muted); }
