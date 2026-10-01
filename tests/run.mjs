@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import * as subnet from '../js/tools/subnet.js';
 import { calcVoip, formatRate } from '../js/tools/voip-bw.js';
-import { parseSip, EXAMPLES as SIP_EXAMPLES } from '../js/tools/sip-parser.js';
+import { parseSip, EXAMPLES as SIP_EXAMPLES, splitHeaderList, parseNameAddr, parseReason, describeEvents, hasSbcHeaders } from '../js/tools/sip-parser.js';
 import { findCode, filterCodes, q850For, reasonHeader, codeClass } from '../js/tools/sip-codes.js';
 import { SIP_CODES, Q850, SIP_TO_Q850, Q850_TO_SIP } from '../data/sip-codes.js';
 import { dscpInfo, parseValue, findPoint, TABLE_ROWS } from '../js/tools/dscp.js';
@@ -562,6 +562,73 @@ test('Max-Forwards obbligatorio nelle richieste, non nelle risposte', () => {
   assert.deepEqual(issuesOf(sipMsg(), 'err'), []);
   const resp = parseSip('SIP/2.0 200 OK\nVia: SIP/2.0/UDP 192.0.2.1;branch=z9hG4bK1\nFrom: <sip:b@x>;tag=1\nTo: <sip:a@x>;tag=2\nCall-ID: 1\nCSeq: 1 OPTIONS\nContent-Length: 0');
   assert.ok(!issuesOf(resp).some((t) => /Max-Forwards/.test(t)));
+});
+
+console.log('Parser SIP: header SBC/CUBE');
+
+test('INVITE con PAI, Diversion, Session-Expires e SDP con telephone-event', () => {
+  const m = parseSip(SIP_EXAMPLES.sbc);
+  assert.deepEqual(issuesOf(m), []);
+  assert.equal(hasSbcHeaders(m.sbc), true);
+  assert.deepEqual(m.sbc.pai.map((e) => [e.display, e.uri]), [['Mario Rossi', 'sip:+390298765432@sbc.example.com'], [null, 'tel:+390298765432']]);
+  assert.deepEqual(m.sbc.diversion, [{ index: 1, display: null, uri: 'sip:+390611111111@pbx.example.com', reason: 'no-answer', counter: '1', privacy: 'off' }]);
+  assert.deepEqual(m.sbc.timer, { expires: 1800, refresher: 'uac', minSe: 90, supported: true, required: false });
+  const te = m.sdp.media[0].telephoneEvent;
+  assert.deepEqual(te, { pt: '101', rate: 8000, events: '0-15', description: 'cifre 0–9, *, #, A–D' });
+});
+
+test('History-Info con Reason incapsulato nella URI', () => {
+  const hi = parseSip(SIP_EXAMPLES.sbc).sbc.historyInfo;
+  assert.equal(hi.length, 2);
+  assert.deepEqual(hi[0], { index: '1', uri: 'sip:+390611111111@pbx.example.com', reason: { protocol: 'SIP', cause: 408, text: 'Request Timeout', meaning: 'Request Timeout' }, tag: null });
+  assert.equal(hi[1].index, '1.1');
+  assert.equal(hi[1].tag, 'rc=1');
+});
+
+test('Reason Q.850 con nome della causa', () => {
+  const m = parseSip(SIP_EXAMPLES.bye);
+  assert.deepEqual(issuesOf(m), []);
+  assert.deepEqual(m.sbc.reason, [{ protocol: 'Q.850', cause: 16, text: 'Normal call clearing', meaning: 'Normal call clearing' }]);
+  assert.deepEqual(parseReason('Q.850;cause=17'), { protocol: 'Q.850', cause: 17, text: null, meaning: 'User busy' });
+  assert.deepEqual(parseReason('SIP;cause=487;text="Request Terminated"').meaning, 'Request Terminated');
+  // più Reason nello stesso header
+  const two = parseSip(SIP_EXAMPLES.bye.replace('Reason: Q.850;cause=16;text="Normal call clearing"', 'Reason: SIP;cause=200;text="Call completed elsewhere", Q.850;cause=26'));
+  assert.deepEqual(two.sbc.reason.map((r) => [r.protocol, r.cause]), [['SIP', 200], ['Q.850', 26]]);
+});
+
+test('session timer: refresher mancante in azzurro, Session-Expires < Min-SE in arancio', () => {
+  const withTimer = (se, minSe) => parseSip(SIP_EXAMPLES.sbc
+    .replace('Session-Expires: 1800;refresher=uac', `Session-Expires: ${se}`)
+    .replace('Min-SE: 90\n', minSe == null ? '' : `Min-SE: ${minSe}\n`));
+  const noRefresher = withTimer('1800', 90);
+  hasIssue(noRefresher, 'info', /Session-Expires 1800 s senza refresher indicato: lo sceglierà lo UAS/);
+  assert.deepEqual(issuesOf(noRefresher, 'warn'), []);
+  const low = withTimer('60;refresher=uac', 120);
+  hasIssue(low, 'warn', /Session-Expires 60 s inferiore a Min-SE 120 s: la controparte può rispondere 422/);
+  const lowDefault = withTimer('80;refresher=uas', null);
+  hasIssue(lowDefault, 'warn', /Session-Expires 80 s inferiore a Min-SE 90 s \(minimo predefinito RFC 4028\)/);
+  hasIssue(withTimer('1800;refresher=caller', 90), 'warn', /refresher "caller" non valido/);
+  assert.deepEqual(issuesOf(withTimer('90;refresher=uac', 90)), [], 'uguale al minimo: nessun avviso');
+  // senza Session-Expires nessuna diagnostica sul timer
+  assert.equal(parseSip(SIP_EXAMPLES.invite).sbc.timer, null);
+  assert.equal(hasSbcHeaders(parseSip(SIP_EXAMPLES.invite).sbc), false);
+});
+
+test('telephone-event senza fmtp in azzurro; eventi descritti', () => {
+  const noFmtp = parseSip(SIP_EXAMPLES.sbc.replace('a=fmtp:101 0-15\n', ''));
+  hasIssue(noFmtp, 'info', /telephone-event \(PT 101\) senza a=fmtp: per RFC 4733 si assumono gli eventi DTMF 0-15/);
+  assert.equal(noFmtp.sdp.media[0].telephoneEvent.events, null);
+  assert.ok(!issuesOf(parseSip(SIP_EXAMPLES.sbc)).some((t) => /telephone-event/.test(t)));
+  assert.equal(describeEvents('0-16'), 'cifre 0–9, *, #, A–D, flash');
+  assert.equal(describeEvents('0-11'), 'cifre 0–9, *, #');
+  assert.equal(describeEvents('0-11,16'), 'cifre 0–9, *, #, flash');
+  assert.equal(describeEvents('x'), null);
+});
+
+test('liste di header con virgole tra virgolette e name-addr', () => {
+  assert.deepEqual(splitHeaderList('"Rossi, Mario" <sip:a@x>, <tel:+39>'), ['"Rossi, Mario" <sip:a@x>', '<tel:+39>']);
+  assert.deepEqual(parseNameAddr('"Rossi, Mario" <sip:a@x;user=phone>;reason=busy'), { display: 'Rossi, Mario', uri: 'sip:a@x;user=phone', params: { reason: 'busy' } });
+  assert.deepEqual(parseNameAddr('sip:b@y;counter=2'), { display: null, uri: 'sip:b@y', params: { counter: '2' } });
 });
 
 console.log('Codici SIP');

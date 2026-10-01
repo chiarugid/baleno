@@ -6,6 +6,7 @@ import { h, fmtInt, kvList, badge, uid } from '../ui/dom.js';
 import { dashlet } from '../ui/dashlet.js';
 import { dataTable } from '../ui/table.js';
 import { parseIPv4, ipv4Type, parseIPv6, ipv6Type } from './subnet.js';
+import { Q850, SIP_CODES } from '../../data/sip-codes.js';
 
 // ---------------------------------------------------------------- Dati di riferimento
 
@@ -88,6 +89,131 @@ function headerParam(value, name) {
 function outsideAngle(value) {
   const close = value.lastIndexOf('>');
   return close >= 0 ? value.slice(close + 1) : value;
+}
+
+// Divide un header a lista sulle virgole che stanno fuori da virgolette e < >.
+export function splitHeaderList(value) {
+  const out = [];
+  let cur = '';
+  let quoted = false;
+  let angle = 0;
+  for (const ch of String(value ?? '')) {
+    if (ch === '"') quoted = !quoted;
+    else if (!quoted && ch === '<') angle++;
+    else if (!quoted && ch === '>') angle = Math.max(0, angle - 1);
+    if (ch === ',' && !quoted && angle === 0) { if (cur.trim()) out.push(cur.trim()); cur = ''; } else cur += ch;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+
+function parseParams(text) {
+  const params = {};
+  for (const part of String(text ?? '').split(';').map((p) => p.trim()).filter(Boolean)) {
+    const eq = part.indexOf('=');
+    const key = (eq < 0 ? part : part.slice(0, eq)).trim().toLowerCase();
+    const val = eq < 0 ? '' : part.slice(eq + 1).trim().replace(/^"(.*)"$/, '$1');
+    params[key] = val;
+  }
+  return params;
+}
+
+// "Nome" <uri>;param=… oppure uri;param=…
+export function parseNameAddr(entry) {
+  const m = /^\s*(?:"((?:[^"\\]|\\.)*)"|([^<"]*?))\s*<([^>]*)>(.*)$/.exec(entry);
+  if (m) return { display: (m[1] ?? m[2] ?? '').trim() || null, uri: m[3].trim(), params: parseParams(m[4]) };
+  const [uri, ...rest] = entry.split(';');
+  return { display: null, uri: uri.trim(), params: parseParams(rest.join(';')) };
+}
+
+// Reason (RFC 3326): protocollo;cause=…;text="…"
+export function parseReason(text) {
+  const [protocol, ...rest] = String(text).split(';');
+  const params = parseParams(rest.join(';'));
+  const cause = /^\d+$/.test(params.cause ?? '') ? Number(params.cause) : null;
+  const proto = protocol.trim();
+  let meaning = null;
+  if (/^Q\.850$/i.test(proto) && cause != null) meaning = Q850[cause] ?? null;
+  if (/^SIP$/i.test(proto) && cause != null) meaning = SIP_CODES.find((c) => c.code === cause)?.reason ?? null;
+  return { protocol: proto, cause, text: params.text ?? null, meaning };
+}
+
+// Eventi RFC 4733 indicati in fmtp (es. "0-15", "0-11,16").
+export function describeEvents(fmtp) {
+  const set = new Set();
+  for (const part of String(fmtp ?? '').split(',').map((p) => p.trim()).filter(Boolean)) {
+    const m = /^(\d+)(?:-(\d+))?$/.exec(part);
+    if (!m) return null;
+    for (let n = Number(m[1]); n <= Number(m[2] ?? m[1]); n++) set.add(n);
+  }
+  const has = (a, b) => { for (let n = a; n <= b; n++) if (!set.has(n)) return false; return true; };
+  const parts = [];
+  if (has(0, 9)) parts.push('cifre 0–9');
+  if (set.has(10)) parts.push('*');
+  if (set.has(11)) parts.push('#');
+  if (has(12, 15)) parts.push('A–D');
+  if (set.has(16)) parts.push('flash');
+  return parts.join(', ') || null;
+}
+
+function parseSbc(all, add, kind) {
+  const entries = (name) => all(name).flatMap(splitHeaderList).map(parseNameAddr);
+  const sbc = {
+    pai: entries('P-Asserted-Identity'),
+    ppi: entries('P-Preferred-Identity'),
+    diversion: entries('Diversion').map((d, i) => ({ index: i + 1, display: d.display, uri: d.uri, reason: d.params.reason ?? null, counter: d.params.counter ?? null, privacy: d.params.privacy ?? null })),
+    historyInfo: entries('History-Info').map((e) => {
+      const q = e.uri.indexOf('?');
+      const base = q < 0 ? e.uri : e.uri.slice(0, q);
+      let reason = null;
+      if (q >= 0) {
+        for (const pair of e.uri.slice(q + 1).split('&')) {
+          const [k, v = ''] = pair.split('=');
+          if (k.toLowerCase() === 'reason') {
+            try { reason = parseReason(decodeURIComponent(v)); } catch { reason = parseReason(v); }
+          }
+        }
+      }
+      const tag = ['rc', 'mp', 'np'].filter((t) => t in e.params).map((t) => (e.params[t] ? `${t}=${e.params[t]}` : t)).join(' ');
+      return { index: e.params.index ?? null, uri: base, reason, tag: tag || null };
+    }),
+    reason: all('Reason').flatMap(splitHeaderList).map(parseReason),
+    timer: null,
+  };
+
+  const se = all('Session-Expires')[0];
+  if (se != null) {
+    const seMatch = /^\s*(\d+)/.exec(se);
+    const minSeText = all('Min-SE')[0] ?? null;
+    const minMatch = minSeText == null ? null : /^\s*(\d+)/.exec(minSeText);
+    const refresher = headerParam(se, 'refresher')?.toLowerCase() ?? null;
+    const optionTag = (name) => all(name).flatMap(splitHeaderList).some((t) => t.toLowerCase() === 'timer');
+    sbc.timer = {
+      expires: seMatch ? Number(seMatch[1]) : null,
+      refresher,
+      minSe: minMatch ? Number(minMatch[1]) : null,
+      supported: optionTag('Supported'),
+      required: optionTag('Require'),
+    };
+    const t = sbc.timer;
+    const minimum = t.minSe ?? 90;
+    if (t.expires == null) add('err', 'header', `Session-Expires "${se}" non numerico.`);
+    else {
+      if (!refresher) {
+        add('info', 'header', `Session-Expires ${t.expires} s senza refresher indicato${kind === 'request' ? ': lo sceglierà lo UAS nella risposta' : ''} (RFC 4028).`);
+      } else if (refresher !== 'uac' && refresher !== 'uas') {
+        add('warn', 'header', `Session-Expires: refresher "${refresher}" non valido, ammessi uac o uas.`);
+      }
+      if (t.expires < minimum) {
+        add('warn', 'header', `Session-Expires ${t.expires} s inferiore a Min-SE ${minimum} s${t.minSe == null ? ' (minimo predefinito RFC 4028)' : ''}: la controparte può rispondere 422 Session Interval Too Small.`);
+      }
+    }
+  }
+  return sbc;
+}
+
+export function hasSbcHeaders(sbc) {
+  return Boolean(sbc && (sbc.pai.length || sbc.ppi.length || sbc.diversion.length || sbc.historyInfo.length || sbc.reason.length || sbc.timer));
 }
 
 function splitHostPort(sentBy) {
@@ -214,6 +340,12 @@ function parseSdp(lines, issues, nat = { detected: false }) {
         source: map ? 'rtpmap' : fixed ? 'statico' : null,
       };
     });
+
+    const te = media.codecs.find((c) => /^telephone-event$/i.test(c.name ?? ''));
+    media.telephoneEvent = te ? { pt: te.pt, rate: te.rate, events: te.fmtp, description: describeEvents(te.fmtp ?? '0-15') } : null;
+    if (te && te.source === 'rtpmap' && !te.fmtp) {
+      add('info', `${label}: telephone-event (PT ${te.pt}) senza a=fmtp: per RFC 4733 si assumono gli eventi DTMF 0-15.`);
+    }
 
     const isRtp = /RTP\//.test(media.proto);
     if (!media.effectiveConnection) add('err', `${label}: nessuna riga c= (né di sessione né di media), indirizzo media sconosciuto.`);
@@ -398,6 +530,9 @@ export function parseSip(text) {
   // Corpo e Content-Length.
   const contentType = get('Content-Type');
   const clText = get('Content-Length');
+  // Header tipici di SBC/CUBE: identità, deviazioni, Reason, session timer.
+  msg.sbc = parseSbc(all, (level, area, message) => add(level, area, message), msg.kind);
+
   // Il corpo si conta ricostruendo un CRLF dopo ogni riga: il testo incollato ha
   // fine riga normalizzati dal browser, quindi la verifica al byte esatto non è possibile.
   if (clText != null) {
@@ -517,6 +652,48 @@ Expires: 3600
 User-Agent: DeskPhone/5.1
 Content-Length: ?`),
 
+  sbc: withLength(`INVITE sip:+390612345678@pbx.example.com;user=phone SIP/2.0
+Via: SIP/2.0/UDP 203.0.113.10:5060;branch=z9hG4bK-sbc-1
+Max-Forwards: 69
+From: "Mario Rossi" <sip:+390298765432@sbc.example.com>;tag=sbc-77
+To: <sip:+390612345678@pbx.example.com>
+Call-ID: 9a8b7c6d@203.0.113.10
+CSeq: 10 INVITE
+Contact: <sip:+390298765432@203.0.113.10:5060>
+P-Asserted-Identity: "Mario Rossi" <sip:+390298765432@sbc.example.com>, <tel:+390298765432>
+Diversion: <sip:+390611111111@pbx.example.com>;reason=no-answer;counter=1;privacy=off
+History-Info: <sip:+390611111111@pbx.example.com?Reason=SIP%3Bcause%3D408%3Btext%3D%22Request%20Timeout%22>;index=1
+History-Info: <sip:+390612345678@pbx.example.com>;index=1.1;rc=1
+Supported: timer, replaces, 100rel
+Session-Expires: 1800;refresher=uac
+Min-SE: 90
+Allow: INVITE, ACK, CANCEL, BYE, OPTIONS, UPDATE, PRACK, INFO
+Content-Type: application/sdp
+Content-Length: ?
+
+v=0
+o=SBC 1 1 IN IP4 203.0.113.10
+s=SIP Call
+c=IN IP4 203.0.113.10
+t=0 0
+m=audio 20000 RTP/AVP 8 0 101
+a=rtpmap:8 PCMA/8000
+a=rtpmap:0 PCMU/8000
+a=rtpmap:101 telephone-event/8000
+a=fmtp:101 0-15
+a=ptime:20
+a=sendrecv`),
+
+  bye: `BYE sip:+390298765432@203.0.113.10:5060 SIP/2.0
+Via: SIP/2.0/UDP 198.51.100.20:5060;branch=z9hG4bK-pbx-9
+Max-Forwards: 70
+From: <sip:+390612345678@pbx.example.com>;tag=pbx-12
+To: "Mario Rossi" <sip:+390298765432@sbc.example.com>;tag=sbc-77
+Call-ID: 9a8b7c6d@203.0.113.10
+CSeq: 2 BYE
+Reason: Q.850;cause=16;text="Normal call clearing"
+Content-Length: 0`,
+
   anomalie: `INVITE sip:200@pbx.example.com SIP/2.0
 Via: SIP/2.0/UDP 192.168.1.50:5060;branch=1234abcd
 From: "Interno 101" <sip:101@pbx.example.com>
@@ -601,6 +778,59 @@ function issuesView(issues) {
     badge(LEVEL[it.level][0], LEVEL[it.level][1]), ' ', it.message)))];
 }
 
+function dtmfValue(te) {
+  const events = te.events
+    ? `eventi ${te.events}${te.description ? ` (${te.description})` : ''}`
+    : `fmtp assente: 0-15 implicito (${describeEvents('0-15')})`;
+  return [`PT ${te.pt}${te.rate ? ` · ${fmtInt(te.rate)} Hz` : ''} · `, h('span', { class: 'sans' }, events)];
+}
+
+function identityText(e) {
+  return e.display ? `"${e.display}" <${e.uri}>` : e.uri;
+}
+
+function sbcView(sbc) {
+  const nodes = [];
+  if (sbc.pai.length || sbc.ppi.length) {
+    nodes.push(h('h3', { class: 'section-title' }, 'Identità (RFC 3325)'), kvList([
+      sbc.pai.length ? { label: 'P-Asserted-Identity', value: sbc.pai.map((e, i) => [i ? h('br') : null, identityText(e)]), hl: true } : null,
+      sbc.ppi.length ? { label: 'P-Preferred-Identity', value: sbc.ppi.map((e, i) => [i ? h('br') : null, identityText(e)]) } : null,
+    ], 'kv--compact'));
+  }
+  if (sbc.diversion.length) {
+    nodes.push(h('h3', { class: 'section-title' }, 'Diversion (RFC 5806)'), plainTable(
+      [{ label: '#', num: true }, { label: 'Deviato da', mono: true }, { label: 'Motivo' }, { label: 'Contatore', num: true }, { label: 'Privacy' }],
+      sbc.diversion.map((d) => [String(d.index), identityText(d), d.reason ?? '—', d.counter ?? '—', d.privacy ?? '—']),
+    ));
+  }
+  if (sbc.historyInfo.length) {
+    nodes.push(h('h3', { class: 'section-title' }, 'History-Info (RFC 7044)'), plainTable(
+      [{ label: 'Indice', mono: true }, { label: 'Destinazione', mono: true }, { label: 'Causa' }, { label: 'Tag', mono: true }],
+      sbc.historyInfo.map((e) => [e.index ?? '—', e.uri, e.reason ? reasonText(e.reason) : '—', e.tag ?? '—']),
+    ));
+  }
+  if (sbc.reason.length) {
+    nodes.push(h('h3', { class: 'section-title' }, 'Reason (RFC 3326)'), plainTable(
+      [{ label: 'Protocollo' }, { label: 'Causa', num: true, mono: true }, { label: 'Significato' }, { label: 'Testo' }],
+      sbc.reason.map((r) => [r.protocol, r.cause == null ? '—' : String(r.cause), r.meaning ?? '—', r.text ?? '—']),
+    ));
+  }
+  if (sbc.timer) {
+    const t = sbc.timer;
+    nodes.push(h('h3', { class: 'section-title' }, 'Session timer (RFC 4028)'), kvList([
+      { label: 'Session-Expires', value: t.expires == null ? badge('non valido', 'err') : `${fmtInt(t.expires)} s (${fmtInt(Math.round(t.expires / 60))} min)`, hl: true },
+      { label: 'Refresher', value: t.refresher ?? h('span', { class: 'sans muted' }, 'non indicato') },
+      { label: 'Min-SE', value: t.minSe == null ? h('span', { class: 'sans muted' }, 'assente (minimo predefinito 90 s)') : `${fmtInt(t.minSe)} s` },
+      { label: 'Option tag timer', value: [t.supported ? 'Supported' : null, t.required ? 'Require' : null].filter(Boolean).join(' e ') || h('span', { class: 'sans muted' }, 'non presente') },
+    ], 'kv--compact'));
+  }
+  return nodes;
+}
+
+function reasonText(r) {
+  return [r.protocol, r.cause != null ? ` ${r.cause}` : '', r.meaning ? ` · ${r.meaning}` : ''].join('');
+}
+
 function sdpView(sdp, nat) {
   const nodes = [kvList([
     sdp.origin ? { label: 'Origine (o=)', value: `${sdp.origin.username} · ${sdp.origin.address ?? '—'}` } : null,
@@ -621,6 +851,7 @@ function sdpView(sdp, nat) {
         { label: 'Protocollo', value: [media.proto, /SAVP/.test(media.proto) ? h('span', { class: 'sub' }, badge(media.crypto.length ? 'SRTP SDES' : media.effectiveFingerprint ? 'SRTP DTLS' : 'SRTP senza chiavi', media.crypto.length || media.effectiveFingerprint ? 'ok' : 'warn')) : null] },
         { label: 'Direzione', value: DIRECTION_LABEL[media.effectiveDirection] ?? media.effectiveDirection },
         media.ptime ? { label: 'ptime', value: `${media.ptime} ms${media.maxptime ? ` (max ${media.maxptime} ms)` : ''}` } : null,
+        media.telephoneEvent ? { label: 'DTMF (RFC 4733)', value: dtmfValue(media.telephoneEvent) } : null,
       ], 'kv--compact'),
     );
     if (media.codecs.length) {
@@ -639,7 +870,7 @@ export function render(container, params, ctx) {
     id: inputId, class: 'input input--mono textarea textarea--code', rows: 22, wrap: 'off', spellcheck: 'false',
     autocomplete: 'off', autocapitalize: 'off', placeholder: 'Incolla qui un messaggio SIP (request o risposta, con eventuale SDP)…',
   });
-  const exampleButtons = [['INVITE con SDP', 'invite'], ['200 OK', 'ok200'], ['REGISTER', 'register'], ['Con anomalie', 'anomalie']]
+  const exampleButtons = [['INVITE con SDP', 'invite'], ['200 OK', 'ok200'], ['REGISTER', 'register'], ['INVITE da SBC', 'sbc'], ['BYE con Reason', 'bye'], ['Con anomalie', 'anomalie']]
     .map(([label, key]) => h('button', { type: 'button', class: 'chip', onclick: () => { textarea.value = EXAMPLES[key]; ctx.setParams({ esempio: key }); update(); } }, label));
 
   const clear = () => { textarea.value = ''; update(); textarea.focus(); };
@@ -667,10 +898,12 @@ export function render(container, params, ctx) {
   const headersDl = dashlet({ title: 'Header', className: 'span-all', flush: true });
   headersDl.body.append(headersTable.el);
   const sdpDl = dashlet({ title: 'SDP', className: 'span-all' });
+  const sbcDl = dashlet({ title: 'Header SBC / CUBE', subtitle: 'identità, deviazioni, cause, session timer', className: 'span-all' });
 
   container.append(h('div', { class: 'tool-grid tool-grid--half' },
     inputDl.el,
     h('div', { class: 'stack-col' }, summaryDl.el, issuesDl.el),
+    sbcDl.el,
     headersDl.el,
     sdpDl.el));
 
@@ -690,6 +923,7 @@ export function render(container, params, ctx) {
       issuesDl.setSubtitle('');
       headersDl.el.hidden = true;
       sdpDl.el.hidden = true;
+      sbcDl.el.hidden = true;
       return;
     }
     const counts = issueCounts(msg.issues);
@@ -699,12 +933,15 @@ export function render(container, params, ctx) {
       summaryDl.body.replaceChildren(h('p', { class: 'empty' }, 'Messaggio non riconosciuto come SIP.'));
       headersDl.el.hidden = true;
       sdpDl.el.hidden = true;
+      sbcDl.el.hidden = true;
       return;
     }
     summaryDl.body.replaceChildren(...summaryView(msg));
     headersDl.el.hidden = false;
     headersDl.setSubtitle(`${fmtInt(msg.headers.length)} righe`);
     headersTable.setRows(msg.headers);
+    sbcDl.el.hidden = !hasSbcHeaders(msg.sbc);
+    if (!sbcDl.el.hidden) sbcDl.body.replaceChildren(...sbcView(msg.sbc));
     sdpDl.el.hidden = !msg.sdp;
     if (msg.sdp) {
       sdpDl.setSubtitle(`${fmtInt(msg.sdp.media.length)} ${msg.sdp.media.length === 1 ? 'flusso' : 'flussi'}`);
