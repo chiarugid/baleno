@@ -355,7 +355,7 @@ test('esempio con anomalie: tutte rilevate', () => {
   const m = parseSip(SIP_EXAMPLES.anomalie);
   hasIssue(m, 'err', /Max-Forwards/);
   hasIssue(m, 'err', /CSeq \(BYE\).*\(INVITE\)/);
-  hasIssue(m, 'err', /Content-Length 120 ma il corpo è di 133 byte/);
+  hasIssue(m, 'warn', /Content-Length non corrisponde \(atteso 120, calcolato 133\)/);
   hasIssue(m, 'err', /dinamico 101 senza a=rtpmap/);
   hasIssue(m, 'warn', /branch senza il prefisso z9hG4bK/);
   hasIssue(m, 'warn', /From senza parametro tag/);
@@ -372,9 +372,26 @@ test('fine riga CRLF o LF danno lo stesso Content-Length', () => {
   assert.equal(crlf.bodyBytes, parseSip(SIP_EXAMPLES.invite).bodyBytes);
 });
 
-test('Content-Length maggiore del corpo: messaggio troncato', () => {
-  const m = parseSip(SIP_EXAMPLES.invite.replace(/Content-Length: \d+/, 'Content-Length: 900'));
-  hasIssue(m, 'err', /troncato/);
+test('Content-Length corretto: verificato, nessun avviso', () => {
+  const m = parseSip(SIP_EXAMPLES.invite);
+  assert.deepEqual(m.contentLengthCheck, { status: 'verified', declared: 285, computed: 285 });
+  assert.ok(!issuesOf(m).some((t) => /Content-Length/.test(t)));
+  // anche senza corpo: Content-Length 0 è verificato
+  assert.equal(parseSip(SIP_EXAMPLES.register).contentLengthCheck.status, 'verified');
+});
+
+test('Content-Length con mismatch reale: avviso arancio, mai accettato in silenzio', () => {
+  const longer = parseSip(SIP_EXAMPLES.invite.replace(/Content-Length: \d+/, 'Content-Length: 900'));
+  hasIssue(longer, 'warn', /Content-Length non corrisponde \(atteso 900, calcolato 285\)\. Il corpo è più corto/);
+  assert.equal(longer.contentLengthCheck.status, 'mismatch');
+  assert.deepEqual(issuesOf(longer, 'err'), []);
+  const shorter = parseSip(SIP_EXAMPLES.invite.replace(/Content-Length: \d+/, 'Content-Length: 250'));
+  hasIssue(shorter, 'warn', /atteso 250, calcolato 285/);
+  // prima venivano accettati in silenzio: corpo senza CRLF finale (−2) e conteggio con solo LF
+  const noFinalCrlf = parseSip(SIP_EXAMPLES.invite.replace(/Content-Length: \d+/, 'Content-Length: 283'));
+  hasIssue(noFinalCrlf, 'warn', /atteso 283, calcolato 285\)\. La differenza è di 2 byte/);
+  const lfOnly = parseSip(SIP_EXAMPLES.invite.replace(/Content-Length: \d+/, 'Content-Length: 271'));
+  hasIssue(lfOnly, 'warn', /atteso 271, calcolato 285/);
 });
 
 test('header compatti, continuazione su più righe e righe di log iniziali', () => {

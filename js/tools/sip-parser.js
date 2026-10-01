@@ -398,19 +398,27 @@ export function parseSip(text) {
   // Corpo e Content-Length.
   const contentType = get('Content-Type');
   const clText = get('Content-Length');
+  // Il corpo si conta ricostruendo un CRLF dopo ogni riga: il testo incollato ha
+  // fine riga normalizzati dal browser, quindi la verifica al byte esatto non è possibile.
   if (clText != null) {
-    if (!/^\d+$/.test(clText)) add('err', 'body', `Content-Length "${clText}" non numerico.`);
-    else {
+    if (!/^\d+$/.test(clText)) {
+      add('err', 'body', `Content-Length "${clText}" non numerico.`);
+      msg.contentLengthCheck = { status: 'invalid', computed: msg.bodyBytes };
+    } else {
       const declared = Number(clText);
-      const candidates = new Set([msg.bodyBytes, Math.max(0, msg.bodyBytes - 2), bodyLines.reduce((n, l) => n + byteLength(l) + 1, 0)]);
       msg.contentLength = declared;
-      if (!candidates.has(declared)) {
-        add('err', 'body', declared > msg.bodyBytes
-          ? `Content-Length ${declared} ma il corpo è di ${msg.bodyBytes} byte: messaggio troncato o lunghezza errata.`
-          : `Content-Length ${declared} ma il corpo è di ${msg.bodyBytes} byte (calcolati con fine riga CRLF): lunghezza errata.`);
+      if (declared === msg.bodyBytes) {
+        msg.contentLengthCheck = { status: 'verified', declared, computed: msg.bodyBytes };
+      } else {
+        msg.contentLengthCheck = { status: 'mismatch', declared, computed: msg.bodyBytes };
+        const hint = declared === msg.bodyBytes - 2 && bodyLines.length
+          ? ' La differenza è di 2 byte: il corpo originale potrebbe non terminare con CRLF.'
+          : declared > msg.bodyBytes ? ' Il corpo è più corto del dichiarato: messaggio forse troncato.' : '';
+        add('warn', 'body', `Content-Length non corrisponde (atteso ${declared}, calcolato ${msg.bodyBytes}).${hint}`);
       }
     }
   } else if (bodyLines.length) {
+    msg.contentLengthCheck = { status: 'missing', computed: msg.bodyBytes };
     add('warn', 'body', 'Corpo presente senza Content-Length (obbligatorio su TCP/TLS).');
   }
   if (bodyLines.length && !contentType) add('err', 'body', 'Corpo presente senza Content-Type.');
@@ -563,7 +571,23 @@ function summaryView(msg) {
     if (value) items.push({ label: name, value });
   }
   if (msg.body) items.push({ label: 'Corpo', value: `${fmtInt(msg.bodyBytes)} byte${msg.get('Content-Type') ? ` · ${msg.get('Content-Type')}` : ''}` });
-  return [kpis, kvList(items)];
+  const cl = msg.contentLengthCheck;
+  if (cl) items.push({ label: 'Content-Length', value: contentLengthValue(cl) });
+  const nodes = [kpis, kvList(items)];
+  if (cl) {
+    nodes.push(h('ul', { class: 'notes' }, h('li', { class: 'note' },
+      'La verifica esatta al byte non è possibile dal testo incollato, perché il browser normalizza i fine riga: il conteggio assume CRLF (come sul cavo) dopo ogni riga del corpo.')));
+  }
+  return nodes;
+}
+
+function contentLengthValue(cl) {
+  switch (cl.status) {
+    case 'verified': return [`${fmtInt(cl.declared)} byte `, badge('verificato', 'ok')];
+    case 'mismatch': return [`atteso ${fmtInt(cl.declared)}, calcolato ${fmtInt(cl.computed)} `, badge('non corrisponde', 'warn')];
+    case 'missing': return [`assente, corpo di ${fmtInt(cl.computed)} byte `, badge('mancante', 'warn')];
+    default: return [badge('non numerico', 'err')];
+  }
 }
 
 function issuesView(issues) {
