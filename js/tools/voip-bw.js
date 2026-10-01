@@ -17,7 +17,7 @@ export function calcVoip({
   codec = 'g711', bitrate, ptime = 20, srtp = 'none',
   ethernet = true, dot1q = false, preamble = false,
   gre = false, ipsec = 'none', cipher = 'cbc', integrity = 'sha1', natt = false,
-  calls = 1, bidirectional = false,
+  calls = 1, bidirectional = false, ipVersion = 4, activity = 1,
 } = {}) {
   const c = CODECS.find((x) => x.id === codec);
   if (!c) return { ok: false, field: 'codec', error: 'Codec sconosciuto.' };
@@ -30,6 +30,11 @@ export function calcVoip({
   if (!Number.isInteger(calls) || calls < 1 || calls > MAX_CALLS) {
     return { ok: false, field: 'calls', error: `Il numero di chiamate deve essere un intero tra 1 e ${fmtInt(MAX_CALLS)}.` };
   }
+  if (ipVersion !== 4 && ipVersion !== 6) return { ok: false, field: 'ip', error: 'Versione IP non valida: 4 o 6.' };
+  if (!Number.isFinite(activity) || activity <= 0 || activity > 1) {
+    return { ok: false, field: 'activity', error: 'Il fattore di attività deve essere maggiore di 0 e al massimo 1.' };
+  }
+  const ipBytes = ipVersion === 6 ? HEADERS.ipv6 : HEADERS.ip;
   const srtpProfile = SRTP.find((x) => x.id === srtp);
   if (!srtpProfile) return { ok: false, field: 'srtp', error: 'Profilo SRTP sconosciuto.' };
   const mode = IPSEC_MODES.find((x) => x.id === ipsec);
@@ -47,12 +52,12 @@ export function calcVoip({
   layers.push(
     { id: 'rtp', label: 'RTP', bytes: HEADERS.rtp },
     { id: 'udp', label: 'UDP', bytes: HEADERS.udp },
-    { id: 'ip', label: 'IP', bytes: HEADERS.ip },
+    { id: 'ip', label: `IPv${ipVersion}`, bytes: ipBytes },
   );
-  packet += HEADERS.rtp + HEADERS.udp + HEADERS.ip;
+  packet += HEADERS.rtp + HEADERS.udp + ipBytes;
 
   if (gre) {
-    layers.push({ id: 'gre', label: 'GRE (IP esterno + GRE)', bytes: HEADERS.gre });
+    layers.push({ id: 'gre', label: 'GRE (IPv4 esterno + GRE)', bytes: HEADERS.gre });
     packet += HEADERS.gre;
   }
 
@@ -62,7 +67,8 @@ export function calcVoip({
     // Transport: si cifra solo ciò che segue l'intestazione IP, che resta.
     const icv = enc.icv ?? auth.icv;
     const authLabel = enc.icv ? 'integrità GCM' : auth.label;
-    const protectedLen = mode.id === 'tunnel' ? packet : packet - HEADERS.ip;
+    const keptIp = gre ? HEADERS.ip : ipBytes;
+    const protectedLen = mode.id === 'tunnel' ? packet : packet - keptIp;
     const encrypted = padTo(protectedLen + HEADERS.espTrailer, enc.block);
     const padding = encrypted - protectedLen - HEADERS.espTrailer;
     const newIp = mode.id === 'tunnel' ? HEADERS.ip : 0;
@@ -73,7 +79,7 @@ export function calcVoip({
       label: `IPsec ${mode.label}`,
       bytes: overhead,
       detail: [
-        newIp ? `IP ${newIp}` : null,
+        newIp ? `IPv4 ${newIp}` : null,
         `ESP ${HEADERS.espHeader}`,
         `IV ${enc.iv}`,
         `padding ${padding}`,
@@ -108,6 +114,7 @@ export function calcVoip({
   // byte per pacchetto × pacchetti/s ÷ 1000, per il numero di versi scelto
   const kbps = (bytes) => ((bytes * 8) / ptime) * directions;
   const perCall = kbps(wireBytes);
+  // VAD: il fattore di attività riduce la banda media, non la dimensione dei pacchetti.
   return {
     ok: true,
     codec: c,
@@ -127,6 +134,12 @@ export function calcVoip({
     kbpsL3: kbps(l3Bytes),
     kbpsPerCall: perCall,
     kbpsTotal: perCall * calls,
+    activity,
+    ipVersion,
+    ipBytes,
+    ppsAvg: (1000 / ptime) * directions * activity,
+    kbpsPerCallAvg: perCall * activity,
+    kbpsTotalAvg: perCall * calls * activity,
     overheadPct: ((wireBytes - payload) / wireBytes) * 100,
   };
 }
@@ -141,7 +154,7 @@ const DEFAULTS = {
   codec: 'g711', bitrate: 24, ptime: 20, srtp: 'none',
   ethernet: true, dot1q: false, preamble: false,
   gre: false, ipsec: 'none', cipher: 'cbc', integrity: 'sha1', natt: false,
-  calls: 10, bidirectional: false,
+  calls: 10, bidirectional: false, ipVersion: 4, activity: 1,
 };
 
 function readParams(params) {
@@ -163,7 +176,14 @@ function readParams(params) {
     natt: flag('natt', DEFAULTS.natt),
     calls: params.has('n') ? Number(params.get('n')) : DEFAULTS.calls,
     bidirectional: params.get('dir') === '2',
+    ipVersion: params.get('ip') === '6' ? 6 : 4,
+    activity: params.has('vad') ? parseActivity(params.get('vad')) ?? DEFAULTS.activity : DEFAULTS.activity,
   };
+}
+
+function parseActivity(text) {
+  const s = String(text ?? '').trim().replace(',', '.');
+  return /^\d+(\.\d+)?$/.test(s) ? Number(s) : null;
 }
 
 function segmented(name, labelId, options) {
@@ -216,34 +236,44 @@ function compositionView(r) {
 }
 
 function resultView(r) {
-  const [perValue, perUnit] = splitRate(r.kbpsPerCall);
-  const [totValue, totUnit] = splitRate(r.kbpsTotal);
+  const vad = r.activity < 1;
+  const [perValue, perUnit] = splitRate(vad ? r.kbpsPerCallAvg : r.kbpsPerCall);
+  const [totValue, totUnit] = splitRate(vad ? r.kbpsTotalAvg : r.kbpsTotal);
   const both = r.directions === 2;
   const notes = [h('li', { class: 'note' }, both
     ? 'Valori bidirezionali: somma dei due versi. Su un collegamento full-duplex ogni verso ne porta la metà.'
     : 'Valori per direzione: ogni chiamata occupa questa banda in ciascun verso del collegamento.')];
   if (r.codec.variable) notes.push(h('li', { class: 'note' }, `${r.codec.name} è a bitrate variabile: il calcolo assume ${r.rate} kbps costanti.`));
   if (r.codec.id === 'g722') notes.push(h('li', { class: 'note' }, 'G.722 campiona a 16 kHz ma il bitrate (64 kbps) e quindi la banda coincidono con G.711.'));
+  if (vad) {
+    notes.push(h('li', { class: 'note' }, `VAD con fattore di attività ${fmtDec(r.activity, 2)}: la banda media è il ${fmtDec(r.activity * 100, 0)}% del picco. È una media statistica: i pacchetti hanno la stessa dimensione, semplicemente non vengono inviati nelle pause. Non include i pacchetti di comfort noise e, con poche chiamate, i picchi di parlato simultaneo raggiungono la banda piena: dimensiona i collegamenti piccoli sul picco.`));
+  }
+  if (r.ipVersion === 6) {
+    notes.push(h('li', { class: 'note' }, `IPv6: intestazione di ${r.ipBytes} B senza extension header.${r.layers.some((l) => l.id === 'gre' || l.id === 'ipsec') ? ' Le intestazioni esterne di GRE e IPsec tunnel restano calcolate come IPv4 (20 B).' : ''}`));
+  }
   const dirLabel = both ? ' (2 versi)' : '';
+  const avgLabel = vad ? ' media' : '';
 
   return [
     h('div', { class: 'kpis' },
-      kpi(`Per chiamata${dirLabel}`, perValue, perUnit, true),
-      kpi(`${fmtInt(r.calls)} ${r.calls === 1 ? 'chiamata' : 'chiamate'}${dirLabel}`, totValue, totUnit, true),
-      kpi(`Pacchetti/s${dirLabel}`, fmtDec(r.pps, 2), 'pps'),
+      kpi(`Per chiamata${avgLabel}${dirLabel}`, perValue, perUnit, true),
+      kpi(`${fmtInt(r.calls)} ${r.calls === 1 ? 'chiamata' : 'chiamate'}${avgLabel}${dirLabel}`, totValue, totUnit, true),
+      kpi(`Pacchetti/s${avgLabel}${dirLabel}`, fmtDec(vad ? r.ppsAvg : r.pps, 2), 'pps'),
       kpi('Overhead', fmtDec(r.overheadPct, 1), '%')),
     kvList([
       { label: 'Codec', value: `${r.codec.name} · ${r.rate} kbps` },
       { label: 'Packetization', value: `${r.ptime} ms` },
       r.srtp.tag ? { label: 'SRTP', value: r.srtp.label } : null,
       r.ipsecLabel ? { label: 'IPsec', value: r.ipsecLabel } : null,
+      { label: 'Intestazione IP', value: `IPv${r.ipVersion} · ${r.ipBytes} B` },
       { label: 'Payload RTP', value: `${fmtInt(r.payload)} B` },
       { label: 'Pacchetto IP (L3)', value: `${fmtInt(r.l3Bytes)} B` },
       r.wireBytes !== r.l3Bytes ? { label: 'Byte su cavo', value: `${fmtInt(r.wireBytes)} B` } : null,
       { label: 'Banda payload', value: formatRate(r.kbpsPayload) },
       { label: 'Banda IP (L3)', value: formatRate(r.kbpsL3) },
-      { label: 'Banda per chiamata', value: formatRate(r.kbpsPerCall), hl: true },
-      { label: `Banda per ${fmtInt(r.calls)}`, value: formatRate(r.kbpsTotal), hl: true },
+      { label: vad ? 'Banda per chiamata (picco)' : 'Banda per chiamata', value: formatRate(r.kbpsPerCall), hl: !vad },
+      { label: vad ? `Banda per ${fmtInt(r.calls)} (picco)` : `Banda per ${fmtInt(r.calls)}`, value: formatRate(r.kbpsTotal), hl: !vad },
+      vad ? { label: `Banda media con VAD ${fmtDec(r.activity, 2)}`, value: `${formatRate(r.kbpsPerCallAvg)} per chiamata · ${formatRate(r.kbpsTotalAvg)} totali`, hl: true } : null,
       { label: 'Conteggio', value: both ? 'Bidirezionale' : 'Per direzione' },
     ]),
     h('h3', { class: 'section-title' }, 'Composizione del pacchetto'),
@@ -272,6 +302,16 @@ export function render(container, params, ctx) {
   const integrity = selectField(uid('auth'), 'Integrità', IPSEC_INTEGRITY.map((a) => ({ id: a.id, label: `${a.label} (ICV ${a.icv} B)` })));
   const integrityHint = h('span', { class: 'field__hint' });
   integrity.el.append(integrityHint);
+  const ipId = uid('ip');
+  const ipGroup = segmented(ipId, `${ipId}-l`, [{ value: '4', label: 'IPv4 (20 B)' }, { value: '6', label: 'IPv6 (40 B)' }]);
+  const vadId = uid('vad');
+  const vadInput = h('input', { id: vadId, class: 'input input--mono', type: 'text', inputmode: 'decimal', autocomplete: 'off', 'aria-describedby': `${vadId}-hint ${vadId}-err` });
+  const vadError = h('span', { class: 'field__error', id: `${vadId}-err`, 'aria-live': 'polite' });
+  const vadField = h('div', { class: 'field' },
+    h('label', { for: vadId }, 'Fattore di attività vocale (VAD)'),
+    vadInput,
+    h('span', { class: 'field__hint', id: `${vadId}-hint` }, '1 = VAD disattivato. Con soppressione del silenzio un valore tipico è 0,6: riduce la banda media, non i pacchetti.'),
+    vadError);
   const callsInput = h('input', { id: ids.calls, class: 'input input--mono', type: 'number', min: 1, max: MAX_CALLS, step: 1, inputmode: 'numeric', 'aria-describedby': `${ids.calls}-err` });
   const callsError = h('span', { class: 'field__error', id: `${ids.calls}-err`, 'aria-live': 'polite' });
 
@@ -283,6 +323,8 @@ export function render(container, params, ctx) {
     h('fieldset', { class: 'field field--plain' },
       h('legend', { class: 'field__label', id: `${ids.ptime}-l` }, 'Packetization'), ptimeGroup),
     srtp.el,
+    h('fieldset', { class: 'field field--plain' },
+      h('legend', { class: 'field__label', id: `${ipId}-l` }, 'Intestazione IP'), ipGroup),
     h('fieldset', { class: 'group' },
       h('legend', null, 'Livello 2'),
       eth.el, dot1q.el, pre.el),
@@ -290,6 +332,7 @@ export function render(container, params, ctx) {
       h('legend', null, 'Tunnel e cifratura'),
       gre.el, ipsec.el, cipher.el, integrity.el, natt.el),
     h('div', { class: 'field' }, h('label', { for: ids.calls }, 'Numero di chiamate'), callsInput, callsError),
+    vadField,
     h('fieldset', { class: 'field field--plain' },
       h('legend', { class: 'field__label', id: `${ids.dir}-l` }, 'Conteggio banda'), dirGroup),
     h('div', { class: 'form-actions' },
@@ -310,8 +353,8 @@ export function render(container, params, ctx) {
       { key: 'payload', label: 'Payload (B)', align: 'right' },
       { key: 'wireBytes', label: 'Totale (B)', align: 'right' },
       { key: 'pps', label: 'pps', align: 'right', format: (r) => fmtDec(r.pps, 2) },
-      { key: 'kbpsPerCall', label: 'Per chiamata', align: 'right', format: (r) => formatRate(r.kbpsPerCall) },
-      { key: 'kbpsTotal', label: 'Totale N chiamate', align: 'right', format: (r) => formatRate(r.kbpsTotal) },
+      { key: 'kbpsPerCallAvg', label: 'Per chiamata', align: 'right', format: (r) => formatRate(r.kbpsPerCallAvg) },
+      { key: 'kbpsTotalAvg', label: 'Totale N chiamate', align: 'right', format: (r) => formatRate(r.kbpsTotalAvg) },
     ],
     pageSize: 15,
     filterPlaceholder: 'Filtra codec…',
@@ -341,6 +384,8 @@ export function render(container, params, ctx) {
     integrity.select.value = v.integrity;
     natt.input.checked = v.natt;
     callsInput.value = Number.isInteger(v.calls) && v.calls >= 1 ? String(v.calls) : String(DEFAULTS.calls);
+    setRadio(ipGroup, v.ipVersion);
+    vadInput.value = fmtDec(v.activity, 2);
   }
 
   function syncControls() {
@@ -374,6 +419,8 @@ export function render(container, params, ctx) {
       natt: !noIpsec && natt.input.checked,
       calls: Number(callsInput.value),
       bidirectional: radioValue(dirGroup) === '2',
+      ipVersion: radioValue(ipGroup) === '6' ? 6 : 4,
+      activity: parseActivity(vadInput.value) ?? NaN,
     };
   }
 
@@ -381,12 +428,15 @@ export function render(container, params, ctx) {
     syncControls();
     callsError.textContent = '';
     callsInput.removeAttribute('aria-invalid');
+    vadError.textContent = '';
+    vadInput.removeAttribute('aria-invalid');
     const v = values();
     const r = calcVoip(v);
     if (!r.ok) {
-      if (r.field === 'calls') {
-        callsError.textContent = r.error;
-        callsInput.setAttribute('aria-invalid', 'true');
+      const target = r.field === 'calls' ? [callsInput, callsError] : r.field === 'activity' ? [vadInput, vadError] : null;
+      if (target) {
+        target[1].textContent = r.error;
+        target[0].setAttribute('aria-invalid', 'true');
       }
       return; // resta visibile l'ultimo risultato valido
     }
@@ -400,7 +450,7 @@ export function render(container, params, ctx) {
       }
     }
     table.setRows(rows);
-    compareDl.setSubtitle(`stesse intestazioni · ${fmtInt(v.calls)} ${v.calls === 1 ? 'chiamata' : 'chiamate'} · ${v.bidirectional ? 'bidirezionale' : 'per direzione'}`);
+    compareDl.setSubtitle(`stesse intestazioni (IPv${v.ipVersion}) · ${fmtInt(v.calls)} ${v.calls === 1 ? 'chiamata' : 'chiamate'} · ${v.bidirectional ? 'bidirezionale' : 'per direzione'}${v.activity < 1 ? ` · media con VAD ${fmtDec(v.activity, 2)}` : ''}`);
 
     const b = (x) => (x ? '1' : '0');
     const withIpsec = v.ipsec !== 'none';
@@ -411,6 +461,7 @@ export function render(container, params, ctx) {
       ipsec: withIpsec ? v.ipsec : '', enc: withIpsec ? v.cipher : '',
       auth: withIpsec && v.cipher !== 'gcm' ? v.integrity : '', natt: b(v.natt),
       n: String(v.calls), dir: v.bidirectional ? '2' : '1',
+      ip: v.ipVersion === 6 ? '6' : '', vad: v.activity < 1 ? String(v.activity) : '',
     });
   }
 

@@ -16,7 +16,8 @@ export const PTIMES = [10, 20, 30];
 export const HEADERS = {
   rtp: 12,
   udp: 8,
-  ip: 20,
+  ip: 20, // IPv4 senza opzioni
+  ipv6: 40, // IPv6 senza extension header
   ethernet: 18, // 14 di intestazione + 4 di FCS
   dot1q: 4,
   preamble: 20, // 8 di preambolo/SFD + 12 di inter-frame gap

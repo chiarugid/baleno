@@ -315,6 +315,56 @@ test('per direzione e bidirezionale', () => {
   assert.equal(formatRate(both.kbpsTotal), '1,74 Mbps');
 });
 
+test('IPv6: +20 B rispetto a IPv4, overhead ricalcolato, payload invariato', () => {
+  const v4 = calcVoip({ codec: 'g711', ptime: 20 });
+  const v6 = calcVoip({ codec: 'g711', ptime: 20, ipVersion: 6 });
+  assert.equal(v6.payload, v4.payload, 'il payload CBR non cambia');
+  assert.equal(v6.payload, 160);
+  assert.equal(v6.l3Bytes - v4.l3Bytes, 20);
+  assert.equal(v6.wireBytes - v4.wireBytes, 20);
+  assert.equal(v6.wireBytes, 238);
+  close(v6.kbpsPerCall, 95.2);
+  close(v4.overheadPct, (58 / 218) * 100);
+  close(v6.overheadPct, (78 / 238) * 100);
+  assert.equal(v6.layers.find((l) => l.id === 'ip').label, 'IPv6');
+  assert.equal(v6.layers.find((l) => l.id === 'ip').bytes, 40);
+  // G.729: stessa differenza di 20 B
+  assert.equal(calcVoip({ codec: 'g729', ipVersion: 6 }).wireBytes - calcVoip({ codec: 'g729' }).wireBytes, 20);
+});
+
+test('IPv6 con GRE e IPsec: intestazioni esterne IPv4, transport conserva l’IP giusto', () => {
+  // transport senza GRE: resta l'intestazione IPv6 (40 B); 220 − 40 = 180 + 2 → 184 (blocco 4)
+  assert.equal(calcVoip({ ipVersion: 6, ipsec: 'transport', cipher: 'gcm' }).l3Bytes, 220 + 8 + 8 + (184 - 180) + 16);
+  // con GRE resta l'IPv4 esterno (20 B): 244 − 20 = 224 + 2 → 228
+  assert.equal(calcVoip({ ipVersion: 6, gre: true, ipsec: 'transport', cipher: 'gcm' }).l3Bytes, 244 + 8 + 8 + (228 - 224) + 16);
+  // tunnel: nuovo IP esterno IPv4 da 20 B
+  assert.match(calcVoip({ ipVersion: 6, ipsec: 'tunnel', cipher: 'cbc' }).layers.find((l) => l.id === 'ipsec').detail, /^IPv4 20 \+/);
+  // IPv4 invariato rispetto a prima
+  assert.equal(calcVoip({ gre: true, ipsec: 'transport', cipher: 'gcm' }).l3Bytes, 260);
+});
+
+test('VAD 0,6: banda media al 60%, pacchetto e picco invariati', () => {
+  const off = calcVoip({ codec: 'g711', ptime: 20, calls: 10 });
+  const vad = calcVoip({ codec: 'g711', ptime: 20, calls: 10, activity: 0.6 });
+  assert.equal(vad.wireBytes, off.wireBytes, 'dimensione del pacchetto invariata');
+  assert.equal(vad.payload, off.payload);
+  close(vad.kbpsPerCall, 87.2, 'picco');
+  close(vad.kbpsPerCallAvg, 87.2 * 0.6);
+  close(vad.kbpsTotalAvg, 872 * 0.6);
+  close(vad.kbpsPerCallAvg / vad.kbpsPerCall, 0.6);
+  close(vad.ppsAvg, 30);
+  close(vad.overheadPct, off.overheadPct, 'overhead percentuale invariato');
+  // default: VAD disattivato, media = picco
+  close(off.kbpsPerCallAvg, off.kbpsPerCall);
+  assert.equal(off.activity, 1);
+});
+
+test('VAD e versione IP non validi', () => {
+  for (const a of [0, -0.1, 1.01, NaN]) assert.equal(calcVoip({ activity: a }).field, 'activity', String(a));
+  assert.equal(calcVoip({ activity: 1 }).ok, true);
+  assert.equal(calcVoip({ ipVersion: 5 }).field, 'ip');
+});
+
 console.log('Parser SIP');
 
 const issuesOf = (msg, level) => msg.issues.filter((i) => !level || i.level === level).map((i) => i.message);
