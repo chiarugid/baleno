@@ -5,6 +5,7 @@ Strumenti di rete e VoIP che girano interamente nel browser, pubblicati su [www.
 - **Calcolatore subnet** IPv4/IPv6: rete, broadcast, range host, wildcard, suddivisione in sottoreti
 - **Calcolatore banda VoIP**: codec, packetization e overhead (SRTP, Ethernet, 802.1Q, preambolo, GRE, IPsec, NAT-T), per direzione o bidirezionale
 - **Parser SIP**: start line, header (anche compatti), SDP con codec e media, anomalie comuni
+- **Codici di risposta SIP**: tutti i codici 1xx–6xx con significato, RFC e mappatura Q.850 (RFC 3398)
 - **Tabella DSCP/CoS/ToS** con PHB e uso tipico *(in sviluppo)*
 - **Convertitore MAC** con lookup vendor OUI locale *(in sviluppo)*
 

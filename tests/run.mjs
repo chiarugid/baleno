@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import * as subnet from '../js/tools/subnet.js';
 import { calcVoip, formatRate } from '../js/tools/voip-bw.js';
 import { parseSip, EXAMPLES as SIP_EXAMPLES } from '../js/tools/sip-parser.js';
+import { findCode, filterCodes, q850For, reasonHeader, codeClass } from '../js/tools/sip-codes.js';
+import { SIP_CODES, Q850, SIP_TO_Q850, Q850_TO_SIP } from '../data/sip-codes.js';
 
 let passed = 0;
 let failed = 0;
@@ -502,6 +504,67 @@ test('Max-Forwards obbligatorio nelle richieste, non nelle risposte', () => {
   assert.deepEqual(issuesOf(sipMsg(), 'err'), []);
   const resp = parseSip('SIP/2.0 200 OK\nVia: SIP/2.0/UDP 192.0.2.1;branch=z9hG4bK1\nFrom: <sip:b@x>;tag=1\nTo: <sip:a@x>;tag=2\nCall-ID: 1\nCSeq: 1 OPTIONS\nContent-Length: 0');
   assert.ok(!issuesOf(resp).some((t) => /Max-Forwards/.test(t)));
+});
+
+console.log('Codici SIP');
+
+test('elenco completo, ordinato e senza duplicati', () => {
+  const codes = SIP_CODES.map((c) => c.code);
+  assert.equal(new Set(codes).size, codes.length);
+  assert.deepEqual(codes, [...codes].sort((a, b) => a - b));
+  assert.ok(codes.every((c) => c >= 100 && c <= 699));
+  for (const c of [100, 180, 183, 200, 302, 401, 403, 404, 407, 408, 480, 481, 486, 487, 488, 491, 500, 502, 503, 504, 600, 603, 607, 608]) {
+    assert.ok(codes.includes(c), `manca ${c}`);
+  }
+  assert.ok(SIP_CODES.every((c) => c.reason && c.rfc.startsWith('RFC ') && c.description.length > 20));
+});
+
+test('classi 1xx–6xx', () => {
+  assert.deepEqual(codeClass(183), { digit: 1, label: 'Provvisoria' });
+  assert.equal(codeClass(486).label, 'Errore del client');
+  assert.equal(codeClass(603).label, 'Errore globale');
+  const by = (d) => filterCodes({ classe: d }).map((c) => c.code);
+  assert.ok(by(4).every((c) => c >= 400 && c < 500));
+  assert.equal(filterCodes().length, SIP_CODES.length);
+});
+
+test('ricerca per codice e testo', () => {
+  assert.deepEqual(filterCodes({ query: '486' }).map((c) => c.code), [486]);
+  assert.ok(filterCodes({ query: 'busy' }).map((c) => c.code).includes(600));
+  assert.equal(findCode(999), null);
+  assert.equal(findCode('487').reason, 'Request Terminated');
+});
+
+test('mappatura SIP → Q.850 (RFC 3398)', () => {
+  assert.deepEqual(q850For(486), { cause: 17, name: 'User busy' });
+  assert.equal(q850For(404).cause, 1);
+  assert.equal(q850For(408).cause, 102);
+  assert.equal(q850For(480).cause, 18);
+  assert.equal(q850For(503).cause, 41);
+  assert.equal(q850For(603).cause, 21);
+  assert.deepEqual(q850For(488), { byWarning: true });
+  assert.equal(q850For(200), null);
+  assert.equal(reasonHeader(486), 'Reason: Q.850;cause=17;text="User busy"');
+  assert.equal(reasonHeader(488), null);
+  for (const [code, cause] of Object.entries(SIP_TO_Q850)) {
+    assert.ok(findCode(code), `codice ${code} non in elenco`);
+    if (cause != null) assert.ok(Q850[cause], `causa ${cause} senza nome`);
+  }
+});
+
+test('mappatura Q.850 → SIP (RFC 3398)', () => {
+  const sipFor = (cause) => Q850_TO_SIP.find((r) => r.cause === cause).sip;
+  assert.equal(sipFor(1), 404);
+  assert.equal(sipFor(16), null);
+  assert.equal(sipFor(17), 486);
+  assert.equal(sipFor(18), 408);
+  assert.equal(sipFor(34), 503);
+  assert.equal(sipFor(102), 504);
+  assert.equal(sipFor(127), 500);
+  for (const r of Q850_TO_SIP) {
+    assert.ok(Q850[r.cause], `causa ${r.cause} senza nome`);
+    if (r.sip != null) assert.ok(findCode(r.sip), `risposta ${r.sip} non in elenco`);
+  }
 });
 
 console.log(`\n${passed} superati, ${failed} falliti`);

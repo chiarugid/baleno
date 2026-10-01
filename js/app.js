@@ -31,6 +31,12 @@ const TOOLS = [
     load: () => import('./tools/sip-parser.js'),
   },
   {
+    id: 'codici', section: 'voce', title: 'Codici di risposta SIP',
+    description: 'Tutti i codici di risposta SIP con significato, RFC e mappatura verso le cause Q.850.',
+    keywords: 'sip risposta errore codice 404 486 487 503 q.850 q850 reason isup causa',
+    load: () => import('./tools/sip-codes.js'),
+  },
+  {
     id: 'dscp', section: 'qos', title: 'Tabella DSCP',
     description: 'DSCP, CoS, ToS e PHB in decimale, binario ed esadecimale, con ricerca.',
     keywords: 'dscp cos tos phb ef af cs qos marcatura precedenza',

@@ -459,6 +459,20 @@ fieldset.field--plain legend { padding: 0; margin-bottom: 4px; }
 .table--plain td { white-space: normal; }
 .table .total-row td { font-weight: 650; background: var(--surface-2); }
 
+/* ---------- Barra filtri dentro una dashlet ---------- */
+
+.dashlet__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.segmented--auto { display: inline-flex; max-width: 100%; overflow-x: auto; }
+.segmented--auto label { flex: none; }
+.segmented--auto span { padding: 0 12px; }
+
 /* ---------- Parser SIP ---------- */
 
 @media (min-width: 900px) {
@@ -475,7 +489,8 @@ fieldset.field--plain legend { padding: 0; margin-bottom: 4px; }
 }
 .textarea--code { font-size: 12px; white-space: pre; overflow: auto; tab-size: 4; }
 
-.table td.wrap { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 240px; }
+.table td.wrap { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 160px; }
+.kv .sans { font-family: var(--font-sans); }
 
 .notes--flush { margin: 0; }
 .note .badge { margin-right: 4px; vertical-align: 1px; }
