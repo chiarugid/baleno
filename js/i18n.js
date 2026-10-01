@@ -103,7 +103,7 @@ add('app.', {
   infoFeedback: ['Segnalazioni, idee o correzioni:', 'Bug reports, ideas or corrections:'],
   infoMail: ['scrivi all’autore', 'write to the author'],
   infoCredits: ['Font Inter, SIL Open Font License 1.1, ospitato localmente. Sorgente:', 'Inter font, SIL Open Font License 1.1, self-hosted. Source:'],
-  visits: ['visite: {n}', 'visits: {n}'],
+  visits: ['le tue visite: {n}', 'your visits: {n}'],
   visitsTitle: ['Visite di questo browser, contate solo in locale', 'Visits from this browser, counted locally only'],
   dashboard: ['Dashboard', 'Dashboard'],
   dashboardIntro: ['Strumenti di rete e VoIP. Tutti i calcoli avvengono nel browser: nessun dato lascia il dispositivo.', 'Network and VoIP tools. Every calculation runs in the browser: no data leaves your device.'],
