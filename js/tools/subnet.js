@@ -249,7 +249,30 @@ export function calc(addressText, prefixText) {
 
 // ---------------------------------------------------------------- Suddivisione
 
-const MAX_SPLIT_BITS = 32;
+// Tre limiti distinti per la suddivisione:
+// - calcolo: fino a 2^32 sottoreti, le righe si generano al volo pagina per pagina;
+// - visualizzazione piena: fino a 4.096 righe ordinamento e filtro valgono per tutto l'elenco,
+//   oltre si sfoglia comunque tutto ma ordinamento e filtro agiscono sulla pagina corrente;
+// - esportazione CSV: fino a 65.536 righe, per tenere il file generabile nel browser.
+export const LIMITS = {
+  calcBits: 32,
+  displayRows: 4096,
+  exportRows: 65536,
+};
+
+// Come trattare un elenco di `count` sottoreti nell'interfaccia.
+export function splitPlan(count) {
+  const full = count <= LIMITS.displayRows;
+  const exportable = count <= LIMITS.exportRows;
+  return {
+    mode: full ? 'full' : 'paged',
+    exportable,
+    notes: [
+      full ? null : `Oltre ${fmtInt(LIMITS.displayRows)} righe: la tabella sfoglia tutte le ${fmtInt(count)} sottoreti, ma ordinamento e filtro agiscono solo sulla pagina corrente.`,
+      exportable ? null : `Esportazione CSV disponibile fino a ${fmtInt(LIMITS.exportRows)} righe: questa suddivisione ne ha ${fmtInt(count)}. Scegli un nuovo prefisso più corto o suddividi una rete più piccola.`,
+    ].filter(Boolean),
+  };
+}
 
 function ceilLog2(n) {
   let bits = 0;
@@ -292,8 +315,8 @@ export function subdivide(result, mode, valueText) {
     };
   }
   const bits = newPrefix - result.prefix;
-  if (bits > MAX_SPLIT_BITS) {
-    return { ok: false, error: `Troppe sottoreti (2^${bits}): il massimo elencabile è 2^${MAX_SPLIT_BITS}.` };
+  if (bits > LIMITS.calcBits) {
+    return { ok: false, error: `Troppe sottoreti (2^${bits}): il massimo calcolabile è 2^${LIMITS.calcBits}.` };
   }
 
   const count = 2 ** bits;
@@ -332,6 +355,22 @@ export function subdivide(result, mode, valueText) {
   return { ok: true, newPrefix, count, getRow, requested };
 }
 
+// CSV con separatore ";" (compatibile con Excel in italiano), una riga per sottorete.
+export function subnetsCsv(split, version) {
+  if (split.count > LIMITS.exportRows) {
+    return { ok: false, error: `Esportazione limitata a ${fmtInt(LIMITS.exportRows)} righe.` };
+  }
+  const head = version === 4 ? ['#', 'Rete', 'Primo host', 'Ultimo host', 'Broadcast', 'Host utilizzabili'] : ['#', 'Rete', 'Primo indirizzo', 'Ultimo indirizzo', 'Indirizzi'];
+  const lines = [head.join(';')];
+  for (let i = 0; i < split.count; i++) {
+    const r = split.getRow(i);
+    lines.push((version === 4
+      ? [r.index, r.network, r.first, r.last, r.broadcast, r.usable]
+      : [r.index, r.network, r.first, r.last, r.total.toString()]).join(';'));
+  }
+  return { ok: true, text: `${lines.join('\r\n')}\r\n`, rows: split.count };
+}
+
 // ---------------------------------------------------------------- Testo per copia
 
 export function resultAsText(r) {
@@ -364,7 +403,6 @@ export function resultAsText(r) {
 
 const DEFAULT_IP = '192.168.10.0/26';
 const EXAMPLES = ['192.168.10.0/26', '172.16.5.130/27', '10.0.0.0 255.255.252.0', '2001:db8:acad::/48'];
-const MATERIALIZE_LIMIT = 4096;
 
 function typeBadge(type) {
   if (/Pubblico|Global/.test(type)) return badge(type, 'ok');
@@ -516,6 +554,26 @@ export function render(container, params, ctx) {
   });
   const splitDl = dashlet({ title: 'Sottoreti', className: 'span-all', flush: true });
   splitDl.el.hidden = true;
+  let currentSplit = null;
+  const exportBtn = h('button', { type: 'button', class: 'btn btn--secondary', onclick: () => downloadCsv() }, 'Esporta CSV');
+  const splitNotes = h('ul', { class: 'notes notes--flush' });
+  const splitBar = h('div', { class: 'dashlet__bar' }, exportBtn, splitNotes);
+
+  function downloadCsv() {
+    if (!currentSplit) return;
+    const csv = subnetsCsv(currentSplit.split, currentSplit.result.version);
+    if (!csv.ok) { toast(csv.error); return; }
+    const { result, split } = currentSplit;
+    const net = (result.version === 4 ? formatIPv4(result.network) : formatIPv6(result.network)).replace(/[:.]/g, '-');
+    // File generato nel browser: nessun dato viene inviato.
+    const url = URL.createObjectURL(new Blob(['\ufeff', csv.text], { type: 'text/csv;charset=utf-8' }));
+    const a = h('a', { href: url, download: `sottoreti_${net}_${result.prefix}_in_${split.newPrefix}.csv` });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast(`Esportate ${fmtInt(csv.rows)} righe`);
+  }
 
   container.append(h('div', { class: 'tool-grid' }, formDl.el, resultDl.el, splitDl.el));
 
@@ -580,9 +638,14 @@ export function render(container, params, ctx) {
     let subtitle = `${fmtInt(split.count)} × /${split.newPrefix} · ${fmtInt(perNet)} ${result.version === 4 ? 'host' : 'indirizzi'} ciascuna`;
     if (split.requested != null && BigInt(split.count) !== split.requested) subtitle += ` (richieste ${fmtInt(split.requested)})`;
     splitDl.setSubtitle(subtitle);
-    if (split.count <= MATERIALIZE_LIMIT) t.setRows(Array.from({ length: split.count }, (_, i) => split.getRow(i)));
+    const plan = splitPlan(split.count);
+    currentSplit = { result, split };
+    if (plan.mode === 'full') t.setRows(Array.from({ length: split.count }, (_, i) => split.getRow(i)));
     else t.setSource({ count: split.count, getRow: split.getRow });
-    splitDl.body.replaceChildren(t.el);
+    exportBtn.disabled = !plan.exportable;
+    exportBtn.title = plan.exportable ? `Scarica ${fmtInt(split.count)} righe in CSV` : `Oltre ${fmtInt(LIMITS.exportRows)} righe`;
+    splitNotes.replaceChildren(...plan.notes.map((n, i) => h('li', { class: `note${i === 0 && plan.mode === 'paged' ? ' note--warn' : ''}` }, n)));
+    splitDl.body.replaceChildren(splitBar, t.el);
   }
 
   // Stato iniziale: parametri dall'URL o esempio predefinito.

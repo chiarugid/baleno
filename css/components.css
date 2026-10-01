@@ -42,6 +42,9 @@
 .btn--primary:hover { background: var(--btn-primary-hover); }
 .btn--secondary { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
 .btn--secondary:hover { background: var(--surface-2); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn--secondary:disabled:hover { background: var(--surface); }
+.btn--primary:disabled:hover { background: var(--btn-primary-bg); }
 
 .chip {
   display: inline-flex;
@@ -578,4 +581,5 @@ fieldset.field--plain legend { padding: 0; margin-bottom: 4px; }
 .kv .sans { font-family: var(--font-sans); }
 
 .notes--flush { margin: 0; }
+.dashlet__bar .notes { flex: 1 1 320px; }
 .note .badge { margin-right: 4px; vertical-align: 1px; }

@@ -200,6 +200,71 @@ test('suddivisione IPv4 grande: /8 in /30 (righe calcolate al volo)', () => {
   assert.equal(s.getRow(4194303).network, '10.255.255.252/30');
 });
 
+console.log('Suddivisione: limiti');
+
+const { LIMITS, splitPlan, subnetsCsv } = subnet;
+
+test('tre limiti distinti: calcolo, visualizzazione piena, esportazione', () => {
+  assert.deepEqual(LIMITS, { calcBits: 32, displayRows: 4096, exportRows: 65536 });
+  assert.ok(LIMITS.displayRows < LIMITS.exportRows && LIMITS.exportRows < 2 ** LIMITS.calcBits);
+});
+
+test('entro la soglia di visualizzazione: ordinamento e filtro pieni, nessun avviso', () => {
+  for (const n of [1, 16, 4096]) {
+    const plan = splitPlan(n);
+    assert.equal(plan.mode, 'full', String(n));
+    assert.equal(plan.exportable, true);
+    assert.deepEqual(plan.notes, []);
+  }
+  const s = subdivide(calc('10.0.0.0/12'), 'prefix', '24');
+  assert.equal(s.count, 4096);
+  assert.equal(splitPlan(s.count).mode, 'full');
+});
+
+test('oltre la soglia: si sfoglia tutto, avviso su ordinamento/filtro per pagina, nessun blocco', () => {
+  const s = subdivide(calc('10.0.0.0/12'), 'prefix', '25');
+  assert.equal(s.ok, true, 'la suddivisione non viene bloccata');
+  assert.equal(s.count, 8192);
+  const plan = splitPlan(s.count);
+  assert.equal(plan.mode, 'paged');
+  assert.equal(plan.exportable, true);
+  assert.deepEqual(plan.notes, ['Oltre 4096 righe: la tabella sfoglia tutte le 8192 sottoreti, ma ordinamento e filtro agiscono solo sulla pagina corrente.']);
+  // tutte le righe restano raggiungibili, anche l'ultima
+  assert.equal(s.getRow(8191).network, '10.15.255.128/25');
+  assert.equal(splitPlan(4097).mode, 'paged');
+});
+
+test('oltre il limite di esportazione: tabella sfogliabile, CSV disattivato', () => {
+  const s = subdivide(calc('10.0.0.0/8'), 'prefix', '30');
+  assert.equal(s.ok, true);
+  assert.equal(s.count, 4194304);
+  const plan = splitPlan(s.count);
+  assert.equal(plan.mode, 'paged');
+  assert.equal(plan.exportable, false);
+  assert.equal(plan.notes.length, 2);
+  assert.equal(plan.notes[1], 'Esportazione CSV disponibile fino a 65.536 righe: questa suddivisione ne ha 4.194.304. Scegli un nuovo prefisso più corto o suddividi una rete più piccola.');
+  assert.equal(subnetsCsv(s, 4).ok, false);
+  assert.equal(splitPlan(65536).exportable, true);
+  assert.equal(splitPlan(65537).exportable, false);
+});
+
+test('oltre il limite di calcolo: errore esplicito', () => {
+  assert.equal(subdivide(calc('2001:db8::/32'), 'prefix', '64').ok, true, '2^32 ammesso');
+  assert.equal(subdivide(calc('2001:db8::/32'), 'prefix', '65').error, 'Troppe sottoreti (2^33): il massimo calcolabile è 2^32.');
+});
+
+test('CSV: intestazione, separatore ";" e righe', () => {
+  const csv = subnetsCsv(subdivide(calc('192.168.10.0/26'), 'prefix', '28'), 4);
+  assert.equal(csv.ok, true);
+  assert.equal(csv.rows, 4);
+  const lines = csv.text.trimEnd().split('\r\n');
+  assert.equal(lines.length, 5);
+  assert.equal(lines[0], '#;Rete;Primo host;Ultimo host;Broadcast;Host utilizzabili');
+  assert.equal(lines[2], '2;192.168.10.16/28;192.168.10.17;192.168.10.30;192.168.10.31;14');
+  const v6 = subnetsCsv(subdivide(calc('2001:db8:acad::/48'), 'prefix', '50'), 6);
+  assert.equal(v6.text.split('\r\n')[1], '1;2001:db8:acad::/50;2001:db8:acad::;2001:db8:acad:3fff:ffff:ffff:ffff:ffff;302231454903657293676544');
+});
+
 console.log('Banda VoIP');
 
 const close = (actual, expected, msg) => assert.ok(Math.abs(actual - expected) < 1e-9, `${msg ?? ''} atteso ${expected}, ottenuto ${actual}`);
