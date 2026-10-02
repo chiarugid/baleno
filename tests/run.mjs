@@ -9,7 +9,8 @@ import { SIP_CODES, Q850, SIP_TO_Q850, Q850_TO_SIP } from '../data/sip-codes.js'
 import { dscpInfo, parseValue, findPoint, TABLE_ROWS } from '../js/tools/dscp.js';
 import { emodel, rToMos, delayImpairment, effectiveIe, oneWayDelay, category, R0 } from '../js/tools/mos.js';
 import { parsePattern, matchPattern, testPattern, applyMask, patternCount } from '../js/tools/cucm.js';
-import { dbmToMw, mwToDbm, eirp, fspl, linkBudget, bandCheck, bandChannels, bandLabel, parseNumber, formatPower, formatDistance } from '../js/tools/rf-power.js';
+import { BANDS as BANDS_ALL } from '../data/rf-limits.js';
+import { dbmToMw, mwToDbm, eirp, fspl, linkBudget, bandCheck, bandChannels, bandLabel, bandsFor, equivalentBand, regulationOf, parseNumber, formatPower, formatDistance } from '../js/tools/rf-power.js';
 import { parseMac, formatMac, lookupVendor, macInfo, specialAddress, eui64LinkLocal, extractMacs, OUI_COUNT } from '../js/tools/mac.js';
 
 let passed = 0;
@@ -1077,6 +1078,62 @@ test('limiti EIRP indicativi per banda', () => {
   assert.equal(bandCheck(20, ''), null);
 });
 
+test('normative: ETSI e FCC, bande separate e limiti FCC', () => {
+  const ids = (reg) => bandsFor(reg).map((b) => b.id);
+  assert.deepEqual(ids('etsi'), ['', '2g4', 'unii1', 'unii2a', 'unii2a-notpc', 'unii2c', 'unii2c-notpc', 'srd58', 'lpi6', 'vlp6']);
+  assert.deepEqual(ids('fcc'), ['', 'fcc-2g4', 'fcc-unii1', 'fcc-unii1-client', 'fcc-unii2a', 'fcc-unii2c', 'fcc-unii3', 'fcc-lpi6-ap', 'fcc-lpi6-client', 'fcc-sp6', 'fcc-vlp6']);
+  // limiti FCC come EIRP equivalente (condotta + 6 dBi) o EIRP diretto a 6 GHz
+  const limit = (id) => bandCheck(0, id).limit;
+  assert.equal(limit('fcc-2g4'), 36, '§15.247: 30 dBm + 6 dBi');
+  assert.equal(limit('fcc-unii1'), 36, 'U-NII-1 AP: 30 dBm + 6 dBi');
+  assert.equal(limit('fcc-unii1-client'), 30, 'U-NII-1 client: 24 dBm + 6 dBi');
+  assert.equal(limit('fcc-unii2a'), 30);
+  assert.equal(limit('fcc-unii2c'), 30);
+  assert.equal(limit('fcc-unii3'), 36);
+  assert.equal(limit('fcc-lpi6-ap'), 30);
+  assert.equal(limit('fcc-lpi6-client'), 24);
+  assert.equal(limit('fcc-sp6'), 36);
+  assert.equal(limit('fcc-vlp6'), 14);
+  assert.equal(bandCheck(25, 'fcc-2g4').ok, true, '25 dBm: oltre ETSI, entro FCC');
+  assert.equal(bandCheck(25, '2g4').ok, false);
+  assert.equal(bandCheck(0, 'fcc-lpi6-client').band.psd, -1);
+  // canali
+  assert.equal(bandChannels('fcc-2g4').text, '1–11 (11)');
+  assert.equal(bandChannels('fcc-unii2c').text, '100–144 (12)');
+  assert.equal(bandChannels('fcc-unii3').text, '149–165 (5)');
+  assert.equal(bandChannels('fcc-lpi6-ap').text, '1–233 (59)');
+  assert.equal(bandChannels('fcc-sp6').text, '1–93, 117–181 (41)');
+  for (const id of ids('fcc').slice(1)) {
+    const { list } = bandChannels(id);
+    const base = id === 'fcc-2g4' ? 2407 : id.includes('6') && !id.includes('unii') ? 5950 : 5000;
+    const [lo, hi] = bandCheck(0, id).band.range;
+    // il canale 144 (5710–5730 MHz) sconfina in U-NII-3, ammesso dalla FCC
+    for (const c of list.filter((x) => !(id === 'fcc-unii2c' && x === 144))) {
+      const centre = base + 5 * c;
+      assert.ok(centre - 10 >= lo - 1 && centre + 10 <= hi + 1, `${id} canale ${c}`);
+    }
+  }
+});
+
+test('cambio normativa: banda equivalente e normativa dalla banda', () => {
+  assert.equal(regulationOf('unii2c'), 'etsi');
+  assert.equal(regulationOf('fcc-unii3'), 'fcc');
+  assert.equal(regulationOf(''), null);
+  assert.equal(equivalentBand('2g4', 'fcc'), 'fcc-2g4');
+  assert.equal(equivalentBand('unii2c-notpc', 'fcc'), 'fcc-unii2c');
+  assert.equal(equivalentBand('srd58', 'fcc'), 'fcc-unii3');
+  assert.equal(equivalentBand('lpi6', 'fcc'), 'fcc-lpi6-ap');
+  assert.equal(equivalentBand('fcc-unii1-client', 'etsi'), 'unii1');
+  assert.equal(equivalentBand('fcc-sp6', 'etsi'), 'lpi6');
+  assert.equal(equivalentBand('fcc-vlp6', 'etsi'), 'vlp6');
+  assert.equal(equivalentBand('fcc-unii3', 'fcc'), 'fcc-unii3', 'stessa normativa: invariata');
+  assert.equal(equivalentBand('', 'fcc'), '', 'nessuna verifica resta tale');
+  for (const b of bandsFor('fcc').concat(bandsFor('etsi')).filter((x) => x.id)) {
+    const other = b.reg === 'fcc' ? 'etsi' : 'fcc';
+    assert.equal(regulationOf(equivalentBand(b.id, other)), other, `${b.id} → ${other}`);
+  }
+});
+
 test('canali da 20 MHz nelle etichette delle bande', () => {
   assert.equal(bandLabel('2g4'), '2,4 GHz (2400–2483,5 MHz) · canali 1–13 (13)');
   assert.equal(bandLabel('unii1'), '5 GHz U-NII-1 indoor (5150–5250 MHz) · canali 36, 40, 44, 48');
@@ -1402,7 +1459,7 @@ test('in inglese i messaggi degli strumenti non contengono italiano', () => {
       if (r.tokens) collect(r.tokens.map((x) => x.meaning));
       if (r.steps) collect(r.steps);
     }
-    for (const b of ['2g4', 'unii1', 'unii2a', 'unii2a-notpc', 'unii2c', 'unii2c-notpc', 'srd58', 'lpi6', 'vlp6']) collect(bandCheck(25, b).band);
+    for (const b of BANDS_ALL.filter((x) => x.id).map((x) => x.id)) collect(bandCheck(25, b).band);
     collect(trn('sip.countErr', 1));
     collect(tr('app.visits', { n: 3 }));
 

@@ -4,7 +4,7 @@
 import { h, fmtDec, kvList, badge, uid } from '../ui/dom.js';
 import { dashlet } from '../ui/dashlet.js';
 import { t, locale } from '../i18n.js';
-import { BANDS } from '../../data/rf-limits.js';
+import { BANDS, REGULATIONS } from '../../data/rf-limits.js';
 
 // ---------------------------------------------------------------- Calcoli
 
@@ -43,10 +43,28 @@ export function linkBudget({ eirpDbm, distanceKm, freqMHz, rxGainDbi = 0, rxLoss
 export function bandChannels(id) {
   const band = BANDS.find((b) => b.id === id);
   if (!band?.channels) return null;
-  const [first, last, step] = band.channels;
   const list = [];
-  for (let c = first; c <= last; c += step) list.push(c);
-  return { list, text: list.length <= 4 ? list.join(', ') : `${first}–${last} (${list.length})` };
+  const parts = band.channels.map(([first, last, step]) => {
+    const seg = [];
+    for (let c = first; c <= last; c += step) seg.push(c);
+    list.push(...seg);
+    return seg.length <= 4 ? seg.join(', ') : `${first}–${last}`;
+  });
+  const text = list.length <= 4 ? list.join(', ') : `${parts.join(', ')} (${list.length})`;
+  return { list, text };
+}
+
+// Bande di una normativa, con la voce "Nessuna verifica" in testa.
+export const bandsFor = (reg) => BANDS.filter((b) => !b.id || b.reg === reg);
+
+export const regulationOf = (bandId) => BANDS.find((b) => b.id === bandId)?.reg ?? null;
+
+// Banda equivalente nell'altra normativa (stessa porzione di spettro), per il cambio di normativa.
+export function equivalentBand(bandId, reg) {
+  const band = BANDS.find((b) => b.id === bandId);
+  if (!band?.id) return '';
+  if (band.reg === reg) return band.id;
+  return BANDS.find((b) => b.id === band.match && b.reg === reg)?.id ?? bandsFor(reg)[1].id;
 }
 
 export function bandLabel(id) {
@@ -89,7 +107,7 @@ export function formatDistance(km) {
 
 // ---------------------------------------------------------------- Interfaccia
 
-const DEFAULTS = { dbm: '20', tx: '17', loss: '1', gain: '4', band: '2g4', d: '50', unit: 'm', f: '2437', grx: '2', lrx: '0', rssi: '-67' };
+const DEFAULTS = { dbm: '20', tx: '17', loss: '1', gain: '4', norma: 'etsi', band: '2g4', d: '50', unit: 'm', f: '2437', grx: '2', lrx: '0', rssi: '-67' };
 const DBM_EXAMPLES = ['0', '20', '30', '-67'];
 const FREQ_EXAMPLES = [['2412', 'ch 1'], ['2437', 'ch 6'], ['5180', 'ch 36'], ['5500', 'ch 100'], ['6135', '6E ch 37']];
 
@@ -139,14 +157,22 @@ export function render(container, params, ctx) {
   const loss = numberField(uid('loss'), t('rf.cableLoss'), 'dB');
   const gain = numberField(uid('gain'), t('rf.antennaGain'), 'dBi');
   const bandId = uid('band');
-  const bandSelect = h('select', { id: bandId, class: 'input' }, BANDS.map((b) => h('option', { value: b.id }, bandLabel(b.id))));
+  const regId = uid('reg');
+  const regSelect = h('select', { id: regId, class: 'input' }, REGULATIONS.map((r) => h('option', { value: r }, t(`rf.reg.${r}`))));
+  const bandSelect = h('select', { id: bandId, class: 'input' });
+  const fillBands = () => bandSelect.replaceChildren(...bandsFor(regSelect.value).map((b) => h('option', { value: b.id }, bandLabel(b.id))));
+  const regNote = h('p', { class: 'field__hint' });
   const eirpOut = h('div');
   const eirpDl = dashlet({ title: 'EIRP', expandable: false, onReset: () => {
-    tx.input.value = DEFAULTS.tx; loss.input.value = DEFAULTS.loss; gain.input.value = DEFAULTS.gain; bandSelect.value = DEFAULTS.band; update();
+    tx.input.value = DEFAULTS.tx; loss.input.value = DEFAULTS.loss; gain.input.value = DEFAULTS.gain;
+    regSelect.value = DEFAULTS.norma; fillBands(); bandSelect.value = DEFAULTS.band; update();
   } });
   eirpDl.body.append(
     h('div', { class: 'field-row field-row--3' }, tx.el, loss.el, gain.el),
-    h('div', { class: 'field' }, h('label', { for: bandId }, t('rf.compareBand')), bandSelect),
+    h('div', { class: 'field-row field-row--reg' },
+      h('div', { class: 'field' }, h('label', { for: regId }, t('rf.regulation')), regSelect),
+      h('div', { class: 'field' }, h('label', { for: bandId }, t('rf.compareBand')), bandSelect)),
+    regNote,
     eirpOut);
 
   // --- Budget di collegamento
@@ -219,6 +245,7 @@ export function render(container, params, ctx) {
     if (!fields.tx.ok || !fields.loss.ok || !fields.gain.ok) { saveParams(); return; }
     const e = eirp(fields.tx.value, fields.loss.value, fields.gain.value);
     const check = bandCheck(e, bandSelect.value);
+    regNote.textContent = t(`rf.regNote.${regSelect.value}`);
     const nodes = [h('div', { class: 'kpis' },
       kpi('EIRP', fmtDec(e, 2), 'dBm', true),
       kpi(t('rf.eirpLinear'), formatPower(dbmToMw(e))),
@@ -269,20 +296,30 @@ export function render(container, params, ctx) {
   function saveParams() {
     ctx.setParams({
       dbm: dbm.input.value.trim(), tx: tx.input.value.trim(), loss: loss.input.value.trim(), gain: gain.input.value.trim(),
-      band: bandSelect.value, d: dist.input.value.trim(), unit: unitSelect.value, f: freq.input.value.trim(),
+      norma: regSelect.value === DEFAULTS.norma ? '' : regSelect.value, band: bandSelect.value, d: dist.input.value.trim(), unit: unitSelect.value, f: freq.input.value.trim(),
       grx: grx.input.value.trim(), lrx: lrx.input.value.trim(), rssi: sens.input.value.trim(),
     });
   }
 
   for (const f of [tx, loss, gain, dist, freq, grx, lrx, sens]) f.input.addEventListener('input', update);
   bandSelect.addEventListener('change', update);
+  regSelect.addEventListener('change', () => {
+    const next = equivalentBand(bandSelect.value, regSelect.value);
+    fillBands();
+    bandSelect.value = next;
+    update();
+  });
   unitSelect.addEventListener('change', update);
 
   dbm.input.value = v('dbm');
   tx.input.value = v('tx');
   loss.input.value = v('loss');
   gain.input.value = v('gain');
-  bandSelect.value = BANDS.some((b) => b.id === v('band')) ? v('band') : DEFAULTS.band;
+  // la banda dell'URL determina la normativa se norma manca (link vecchi: sempre ETSI)
+  const urlBand = BANDS.some((b) => b.id === v('band')) ? v('band') : DEFAULTS.band;
+  regSelect.value = REGULATIONS.includes(params.get('norma')) ? params.get('norma') : regulationOf(urlBand) ?? DEFAULTS.norma;
+  fillBands();
+  bandSelect.value = equivalentBand(urlBand, regSelect.value);
   dist.input.value = v('d');
   unitSelect.value = v('unit') === 'km' ? 'km' : 'm';
   freq.input.value = v('f');
