@@ -154,6 +154,7 @@ export function render(container, params, ctx) {
 
   // --- EIRP
   const tx = numberField(uid('tx'), t('rf.txPower'), 'dBm');
+  const txMw = numberField(uid('txmw'), t('rf.txPower'), 'mW');
   const loss = numberField(uid('loss'), t('rf.cableLoss'), 'dB');
   const gain = numberField(uid('gain'), t('rf.antennaGain'), 'dBi');
   const bandId = uid('band');
@@ -164,11 +165,12 @@ export function render(container, params, ctx) {
   const regNote = h('p', { class: 'field__hint' });
   const eirpOut = h('div');
   const eirpDl = dashlet({ title: 'EIRP', expandable: false, onReset: () => {
-    tx.input.value = DEFAULTS.tx; loss.input.value = DEFAULTS.loss; gain.input.value = DEFAULTS.gain;
+    tx.input.value = DEFAULTS.tx; loss.input.value = DEFAULTS.loss; gain.input.value = DEFAULTS.gain; syncTxMw();
     regSelect.value = DEFAULTS.norma; fillBands(); bandSelect.value = DEFAULTS.band; update();
   } });
   eirpDl.body.append(
-    h('div', { class: 'field-row field-row--3' }, tx.el, loss.el, gain.el),
+    h('div', { class: 'field-row field-row--2' }, tx.el, txMw.el),
+    h('div', { class: 'field-row field-row--2' }, loss.el, gain.el),
     h('div', { class: 'field-row field-row--reg' },
       h('div', { class: 'field' }, h('label', { for: regId }, t('rf.regulation')), regSelect),
       h('div', { class: 'field' }, h('label', { for: bandId }, t('rf.compareBand')), bandSelect)),
@@ -301,6 +303,21 @@ export function render(container, params, ctx) {
     });
   }
 
+  // Potenza Tx in dBm o in mW: chi viene modificato aggiorna l'altro (nell'URL resta il valore in dBm).
+  function syncTxMw() {
+    const n = parseNumber(tx.input.value);
+    txMw.input.value = n == null ? '' : fmtSig(dbmToMw(n));
+    setError(txMw);
+  }
+  tx.input.addEventListener('input', syncTxMw);
+  txMw.input.addEventListener('input', () => {
+    const n = parseNumber(txMw.input.value);
+    if (n == null) return setError(txMw, t('ui.invalidNumber'));
+    if (n <= 0) return setError(txMw, t('rf.err.linear'));
+    setError(txMw);
+    tx.input.value = fmtSig(mwToDbm(n));
+    update();
+  });
   for (const f of [tx, loss, gain, dist, freq, grx, lrx, sens]) f.input.addEventListener('input', update);
   bandSelect.addEventListener('change', update);
   regSelect.addEventListener('change', () => {
@@ -313,6 +330,7 @@ export function render(container, params, ctx) {
 
   dbm.input.value = v('dbm');
   tx.input.value = v('tx');
+  syncTxMw();
   loss.input.value = v('loss');
   gain.input.value = v('gain');
   // la banda dell'URL determina la normativa se norma manca (link vecchi: sempre ETSI)
