@@ -11,7 +11,7 @@ import { emodel, rToMos, delayImpairment, effectiveIe, oneWayDelay, category, R0
 import { parsePattern, matchPattern, testPattern, applyMask, patternCount } from '../js/tools/cucm.js';
 import { BANDS as BANDS_ALL } from '../data/rf-limits.js';
 import { rxAtMeters, fsplProfile, RANGES, pathLoss, distanceAt, ENVIRONMENTS } from '../js/tools/rf-chart.js';
-import { dbmToMw, mwToDbm, eirp, fspl, linkBudget, bandCheck, bandChannels, bandLabel, bandsFor, equivalentBand, regulationOf, parseNumber, formatPower, formatDistance } from '../js/tools/rf-power.js';
+import { dbmToMw, mwToDbm, eirp, fspl, linkBudget, bandCheck, bandChannels, bandLabel, bandCenter, channelFreq, bandsFor, equivalentBand, regulationOf, parseNumber, formatPower, formatDistance } from '../js/tools/rf-power.js';
 import { parseMac, formatMac, lookupVendor, macInfo, specialAddress, eui64LinkLocal, extractMacs, OUI_COUNT } from '../js/tools/mac.js';
 
 let passed = 0;
@@ -1184,6 +1184,26 @@ test('modello ambiente: log-distanza con esponente n e pareti', () => {
   near(rxAtMeters(link, distanceAt(link, { n: 3, walls: 3, wallLoss: 10 }, -67), { n: 3, walls: 3, wallLoss: 10 }).rxDbm, -67, 1e-6, 'coerente con la curva');
   assert.equal(distanceAt(link, { n: 3, walls: 10, wallLoss: 40 }, -67), null, 'pareti che bloccano tutto');
   assert.deepEqual(ENVIRONMENTS.map((e) => e.n), [2, 2.5, 3, 3.5, null]);
+});
+
+test('frequenza del canale centrale di ogni banda', () => {
+  assert.deepEqual(bandCenter('2g4'), { channel: 6, freqMHz: 2437 });
+  assert.deepEqual(bandCenter('fcc-2g4'), { channel: 6, freqMHz: 2437 });
+  assert.deepEqual(bandCenter('unii1'), { channel: 40, freqMHz: 5200 });
+  assert.deepEqual(bandCenter('unii2a'), { channel: 56, freqMHz: 5280 });
+  assert.deepEqual(bandCenter('unii2c'), { channel: 120, freqMHz: 5600 });
+  assert.deepEqual(bandCenter('fcc-unii2c'), { channel: 120, freqMHz: 5600 });
+  assert.deepEqual(bandCenter('srd58'), { channel: 161, freqMHz: 5805 });
+  assert.deepEqual(bandCenter('lpi6'), { channel: 45, freqMHz: 6175 });
+  assert.equal(channelFreq('2g4', 13), 2472);
+  assert.equal(channelFreq('unii1', 36), 5180);
+  assert.equal(channelFreq('lpi6', 1), 5955);
+  assert.equal(bandCenter(''), null);
+  // ogni banda: il canale centrale cade dentro la banda
+  for (const b of BANDS_ALL.filter((x) => x.id)) {
+    const c = bandCenter(b.id);
+    assert.ok(c.freqMHz - 10 >= b.range[0] && c.freqMHz + 10 <= b.range[1], `${b.id}: ${c.freqMHz} MHz`);
+  }
 });
 
 test('canali da 20 MHz nelle etichette delle bande', () => {

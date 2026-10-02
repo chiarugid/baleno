@@ -68,6 +68,23 @@ export function equivalentBand(bandId, reg) {
   return BANDS.find((b) => b.id === band.match && b.reg === reg)?.id ?? bandsFor(reg)[1].id;
 }
 
+// Frequenza centrale (MHz) di un canale da 20 MHz: 2,4 GHz, 5 GHz o 6 GHz secondo la banda.
+export function channelFreq(bandId, channel) {
+  const band = BANDS.find((b) => b.id === bandId);
+  if (!band?.range) return null;
+  const base = band.range[0] < 3000 ? 2407 : band.range[0] >= 5925 ? 5950 : 5000;
+  return base + 5 * channel;
+}
+
+// Canale rappresentativo della banda per il calcolo: il 6 a 2,4 GHz, altrimenti quello centrale.
+export function bandCenter(bandId) {
+  const ch = bandChannels(bandId);
+  if (!ch) return null;
+  const band = BANDS.find((b) => b.id === bandId);
+  const channel = band.range[0] < 3000 ? 6 : ch.list[Math.floor((ch.list.length - 1) / 2)];
+  return { channel, freqMHz: channelFreq(bandId, channel) };
+}
+
 export function bandLabel(id) {
   const label = t(`rf.band.${id || 'none'}.label`);
   const ch = bandChannels(id);
@@ -328,11 +345,17 @@ export function render(container, params, ctx) {
     update();
   });
   for (const f of [tx, loss, gain, dist, freq, grx, lrx, sens]) f.input.addEventListener('input', update);
-  bandSelect.addEventListener('change', update);
+  // Scegliendo la banda, la frequenza del budget (e del grafico) passa al suo canale centrale.
+  function followBand() {
+    const center = bandCenter(bandSelect.value);
+    if (center) freq.input.value = String(center.freqMHz);
+  }
+  bandSelect.addEventListener('change', () => { followBand(); update(); });
   regSelect.addEventListener('change', () => {
     const next = equivalentBand(bandSelect.value, regSelect.value);
     fillBands();
     bandSelect.value = next;
+    followBand();
     update();
   });
   unitSelect.addEventListener('change', update);
