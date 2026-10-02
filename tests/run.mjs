@@ -10,6 +10,7 @@ import { dscpInfo, parseValue, findPoint, TABLE_ROWS } from '../js/tools/dscp.js
 import { emodel, rToMos, delayImpairment, effectiveIe, oneWayDelay, category, R0 } from '../js/tools/mos.js';
 import { parsePattern, matchPattern, testPattern, applyMask, patternCount } from '../js/tools/cucm.js';
 import { BANDS as BANDS_ALL } from '../data/rf-limits.js';
+import { rxAtMeters, fsplProfile, RANGES } from '../js/tools/rf-chart.js';
 import { dbmToMw, mwToDbm, eirp, fspl, linkBudget, bandCheck, bandChannels, bandLabel, bandsFor, equivalentBand, regulationOf, parseNumber, formatPower, formatDistance } from '../js/tools/rf-power.js';
 import { parseMac, formatMac, lookupVendor, macInfo, specialAddress, eui64LinkLocal, extractMacs, OUI_COUNT } from '../js/tools/mac.js';
 
@@ -1137,6 +1138,25 @@ test('cambio normativa: banda equivalente e normativa dalla banda', () => {
     const other = b.reg === 'fcc' ? 'etsi' : 'fcc';
     assert.equal(regulationOf(equivalentBand(b.id, other)), other, `${b.id} → ${other}`);
   }
+});
+
+test('grafico FSPL: potenza a una distanza e curva', () => {
+  const link = { eirpDbm: 20, freqMHz: 2437, rxGainDbi: 2, rxLossDb: 0 };
+  const at = rxAtMeters(link, 50);
+  // FSPL a 50 m, 2437 MHz = 20·log10(0,05) + 20·log10(2437) + 32,44 ≈ 74,16 dB (come il budget)
+  near(at.fspl, fspl(0.05, 2437), 1e-9);
+  near(at.fspl, 74.16, 0.01);
+  near(at.rxDbm, 20 - 74.16 + 2, 0.01);
+  // raddoppiare la distanza toglie 6,02 dB
+  near(rxAtMeters(link, 100).rxDbm - at.rxDbm, -20 * Math.log10(2), 1e-9);
+  assert.equal(rxAtMeters(link, 0), null);
+  assert.equal(rxAtMeters({ ...link, freqMHz: 0 }, 10), null);
+  const curve = fsplProfile(link, 100, 200);
+  assert.equal(curve.length, 200);
+  near(curve[0].m, 0.5, 1e-12);
+  near(curve[199].m, 100, 1e-12);
+  assert.ok(curve.every((p, i) => i === 0 || p.rxDbm < curve[i - 1].rxDbm), 'monotona decrescente');
+  assert.deepEqual(RANGES, [20, 100, 500, 2000, 10000]);
 });
 
 test('canali da 20 MHz nelle etichette delle bande', () => {

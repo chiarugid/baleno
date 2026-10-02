@@ -34,6 +34,7 @@
   --accent: #049fd9;
   --accent-text: #0277a8;
   --accent-soft: rgba(4, 159, 217, 0.12);
+  --chart-line: #0277a8;
   --btn-primary-bg: #037cad;
   --btn-primary-hover: #026c99;
   --btn-primary-text: #ffffff;
@@ -83,6 +84,7 @@
     --accent: #1fb1ea;
     --accent-text: #4cc3f0;
     --accent-soft: rgba(31, 177, 234, 0.16);
+    --chart-line: #1799cc;
     --btn-primary-bg: #1fb1ea;
     --btn-primary-hover: #4cc3f0;
     --btn-primary-text: #05202c;
@@ -129,6 +131,7 @@
   --accent: #1fb1ea;
   --accent-text: #4cc3f0;
   --accent-soft: rgba(31, 177, 234, 0.16);
+  --chart-line: #1799cc;
   --btn-primary-bg: #1fb1ea;
   --btn-primary-hover: #4cc3f0;
   --btn-primary-text: #05202c;

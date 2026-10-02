@@ -935,6 +935,16 @@ add('rf.', {
   theoretical: ['teorica, spazio libero', 'theoretical, free space'],
   incomplete: ['Completa i campi per calcolare il budget.', 'Fill in the fields to compute the budget.'],
   previewFspl: ['FSPL 2,4 GHz, 1 km', 'FSPL 2.4 GHz, 1 km'],
+  'chart.title': ['Potenza ricevuta in funzione della distanza', 'Received power versus distance'],
+  'chart.subtitle': ['FSPL, spazio libero; usa EIRP, frequenza e lato Rx sopra', 'FSPL, free space; uses the EIRP, frequency and Rx side above'],
+  'chart.range': ['Scala del grafico', 'Chart range'],
+  'chart.distance': ['Distanza', 'Distance'],
+  'chart.slider': ['Scegli la distanza', 'Pick the distance'],
+  'chart.rxMw': ['Potenza ricevuta in mW', 'Received power in mW'],
+  'chart.rssiLine': ['RSSI di progetto {n} dBm', 'Design RSSI {n} dBm'],
+  'chart.hint': ['Clicca o trascina sul grafico per scegliere la distanza. La curva ignora muri, ostacoli e multipath: in interni la potenza reale è più bassa.', 'Click or drag on the chart to pick the distance. The curve ignores walls, obstacles and multipath: indoors the real power is lower.'],
+  'chart.table': ['Tabella dei valori', 'Table of values'],
+  'chart.aria': ['Grafico della potenza ricevuta: da {from} dBm a un decimo della scala fino a {to} dBm a {range}.', 'Received power chart: from {from} dBm at a tenth of the range down to {to} dBm at {range}.'],
 });
 
 // ================================================================ Stima MOS (E-model)

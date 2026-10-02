@@ -5,6 +5,7 @@ import { h, fmtDec, kvList, badge, uid } from '../ui/dom.js';
 import { dashlet } from '../ui/dashlet.js';
 import { t, locale } from '../i18n.js';
 import { BANDS, REGULATIONS } from '../../data/rf-limits.js';
+import { fsplChart } from './rf-chart.js';
 
 // ---------------------------------------------------------------- Calcoli
 
@@ -203,7 +204,12 @@ export function render(container, params, ctx) {
       h('p', { class: 'field__hint' }, t('rf.fsplHint'))),
     budgetOut));
 
-  container.append(h('div', { class: 'tool-grid tool-grid--half' }, convDl.el, eirpDl.el, budgetDl.el));
+  // --- Grafico potenza / distanza
+  const chart = fsplChart({ formatPower, dbmToMw, onChange: () => saveParams() });
+  const chartDl = dashlet({ title: t('rf.chart.title'), subtitle: t('rf.chart.subtitle'), className: 'span-all' });
+  chartDl.body.append(chart.el);
+
+  container.append(h('div', { class: 'tool-grid tool-grid--half' }, convDl.el, eirpDl.el, budgetDl.el, chartDl.el));
 
   // --- Logica
   function showConversion(mwValue, source) {
@@ -244,7 +250,7 @@ export function render(container, params, ctx) {
 
   function update() {
     const fields = { tx: readField(tx), loss: readField(loss), gain: readField(gain) };
-    if (!fields.tx.ok || !fields.loss.ok || !fields.gain.ok) { saveParams(); return; }
+    if (!fields.tx.ok || !fields.loss.ok || !fields.gain.ok) { chart.update(null); saveParams(); return; }
     const e = eirp(fields.tx.value, fields.loss.value, fields.gain.value);
     const check = bandCheck(e, bandSelect.value);
     regNote.textContent = t(`rf.regNote.${regSelect.value}`);
@@ -292,6 +298,9 @@ export function render(container, params, ctx) {
       }
     }
     budgetOut.replaceChildren(...(budgetNodes ?? [h('p', { class: 'empty' }, t('rf.incomplete'))]));
+    // il grafico usa EIRP, frequenza e lato ricevente del budget, non la sua distanza
+    const chartOk = b.f.ok && b.f.value > 0 && b.grx.ok && b.lrx.ok && b.rssi.ok;
+    chart.update(chartOk ? { eirpDbm: e, freqMHz: b.f.value, rxGainDbi: b.grx.value, rxLossDb: b.lrx.value } : null, chartOk ? b.rssi.value : null);
     saveParams();
   }
 
@@ -299,7 +308,7 @@ export function render(container, params, ctx) {
     ctx.setParams({
       dbm: dbm.input.value.trim(), tx: tx.input.value.trim(), loss: loss.input.value.trim(), gain: gain.input.value.trim(),
       norma: regSelect.value === DEFAULTS.norma ? '' : regSelect.value, band: bandSelect.value, d: dist.input.value.trim(), unit: unitSelect.value, f: freq.input.value.trim(),
-      grx: grx.input.value.trim(), lrx: lrx.input.value.trim(), rssi: sens.input.value.trim(),
+      grx: grx.input.value.trim(), lrx: lrx.input.value.trim(), rssi: sens.input.value.trim(), ...chart.params(),
     });
   }
 
@@ -344,6 +353,7 @@ export function render(container, params, ctx) {
   grx.input.value = v('grx');
   lrx.input.value = v('lrx');
   sens.input.value = params.has('rssi') ? params.get('rssi') : DEFAULTS.rssi;
+  chart.init(Number(params.get('gr')), Number(params.get('gd') ?? 50));
   fromDbm();
   update();
 }
