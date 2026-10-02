@@ -21,7 +21,8 @@ export const BANDS = [
   { id: 'lpi6', reg: 'etsi', range: [5945, 6425], channels: [[1, 93, 4]], eirp: 23, psd: 10, match: 'fcc-lpi6-ap' },
   { id: 'vlp6', reg: 'etsi', range: [5945, 6425], channels: [[1, 93, 4]], eirp: 14, psd: 1, match: 'fcc-vlp6' },
 
-  // FCC Part 15 (Stati Uniti): potenza condotta massima + antenna fino a 6 dBi
+  // FCC Part 15 (Stati Uniti): §15.247 e §15.407, https://www.ecfr.gov/current/title-47/section-15.407
+  // Fino a 5,8 GHz il limite è sulla potenza condotta: qui EIRP equivalente con antenna da 6 dBi.
   { id: 'fcc-2g4', reg: 'fcc', range: [2400, 2483.5], channels: [[1, 11, 1]], eirp: 36, match: '2g4' },
   { id: 'fcc-unii1', reg: 'fcc', range: [5150, 5250], channels: [[36, 48, 4]], eirp: 36, psd: 23, match: 'unii1' },
   { id: 'fcc-unii1-client', reg: 'fcc', range: [5150, 5250], channels: [[36, 48, 4]], eirp: 30, psd: 17, match: 'unii1' },
@@ -30,6 +31,9 @@ export const BANDS = [
   { id: 'fcc-unii3', reg: 'fcc', range: [5725, 5850], channels: [[149, 165, 4]], eirp: 36, match: 'srd58' },
   { id: 'fcc-lpi6-ap', reg: 'fcc', range: [5925, 7125], channels: [[1, 233, 4]], eirp: 30, psd: 5, match: 'lpi6' },
   { id: 'fcc-lpi6-client', reg: 'fcc', range: [5925, 7125], channels: [[1, 233, 4]], eirp: 24, psd: -1, match: 'lpi6' },
-  { id: 'fcc-sp6', reg: 'fcc', range: [5925, 6875], channels: [[1, 93, 4], [117, 181, 4]], eirp: 36, psd: 23, match: 'lpi6' },
-  { id: 'fcc-vlp6', reg: 'fcc', range: [5925, 6875], channels: [[1, 93, 4], [117, 181, 4]], eirp: 14, psd: -5, match: 'vlp6' },
+  { id: 'fcc-sp6-ap', reg: 'fcc', range: [5925, 6875], channels: [[1, 93, 4], [117, 181, 4]], eirp: 36, psd: 23, match: 'lpi6' },
+  { id: 'fcc-sp6-client', reg: 'fcc', range: [5925, 6875], channels: [[1, 93, 4], [117, 181, 4]], eirp: 30, psd: 17, match: 'lpi6' },
+  { id: 'fcc-gvp6-ap', reg: 'fcc', range: [5925, 6875], channels: [[1, 93, 4], [117, 181, 4]], eirp: 24, match: 'lpi6' },
+  { id: 'fcc-gvp6-client', reg: 'fcc', range: [5925, 6875], channels: [[1, 93, 4], [117, 181, 4]], eirp: 18, match: 'lpi6' },
+  { id: 'fcc-vlp6', reg: 'fcc', range: [5925, 7125], channels: [[1, 233, 4]], eirp: 14, psd: -5, match: 'vlp6' },
 ];

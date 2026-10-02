@@ -869,10 +869,16 @@ add('rf.band.', {
   'fcc-lpi6-ap.note': ['Low Power Indoor: 30 dBm EIRP e 5 dBm/MHz, solo uso indoor, alimentazione da rete e niente antenne staccabili.', 'Low Power Indoor: 30 dBm EIRP and 5 dBm/MHz, indoor use only, mains powered, no detachable antennas.'],
   'fcc-lpi6-client.label': ['6 GHz LPI, client (5925–7125 MHz)', '6 GHz LPI, client (5925–7125 MHz)'],
   'fcc-lpi6-client.note': ['Client sotto un access point LPI: 24 dBm EIRP e −1 dBm/MHz.', 'Client under an LPI access point: 24 dBm EIRP and −1 dBm/MHz.'],
-  'fcc-sp6.label': ['6 GHz Standard Power con AFC (U-NII-5 e U-NII-7)', '6 GHz Standard Power with AFC (U-NII-5 and U-NII-7)'],
-  'fcc-sp6.note': ['Standard Power: 36 dBm EIRP e 23 dBm/MHz, anche all’esterno, solo con autorizzazione AFC; 5925–6425 e 6525–6875 MHz.', 'Standard Power: 36 dBm EIRP and 23 dBm/MHz, outdoors too, only with AFC authorisation; 5925–6425 and 6525–6875 MHz.'],
-  'fcc-vlp6.label': ['6 GHz VLP (U-NII-5 e U-NII-7)', '6 GHz VLP (U-NII-5 and U-NII-7)'],
-  'fcc-vlp6.note': ['Very Low Power: 14 dBm EIRP e −5 dBm/MHz, anche all’esterno, senza AFC; 5925–6425 e 6525–6875 MHz.', 'Very Low Power: 14 dBm EIRP and −5 dBm/MHz, outdoors too, without AFC; 5925–6425 and 6525–6875 MHz.'],
+  'fcc-sp6-ap.label': ['6 GHz Standard Power con AFC, AP e fixed client (U-NII-5 e U-NII-7)', '6 GHz Standard Power with AFC, AP and fixed client (U-NII-5 and U-NII-7)'],
+  'fcc-sp6-ap.note': ['Standard Power: 36 dBm EIRP e 23 dBm/MHz per access point e fixed client, anche all’esterno, solo con autorizzazione AFC; 5925–6425 e 6525–6875 MHz.', 'Standard Power: 36 dBm EIRP and 23 dBm/MHz for access points and fixed clients, outdoors too, only with AFC authorisation; 5925–6425 and 6525–6875 MHz.'],
+  'fcc-sp6-client.label': ['6 GHz Standard Power, client (U-NII-5 e U-NII-7)', '6 GHz Standard Power, client (U-NII-5 and U-NII-7)'],
+  'fcc-sp6-client.note': ['Client associato a un AP Standard Power: 30 dBm EIRP e almeno 6 dB sotto la potenza autorizzata dell’AP.', 'Client associated with a Standard Power AP: 30 dBm EIRP and at least 6 dB below the AP authorised power.'],
+  'fcc-gvp6-ap.label': ['6 GHz GVP, access point (U-NII-5 e U-NII-7)', '6 GHz GVP, access point (U-NII-5 and U-NII-7)'],
+  'fcc-gvp6-ap.note': ['Geofenced Variable Power (regole in vigore dal 27 aprile 2026): 24 dBm EIRP per l’access point; valgono anche i limiti PSD e le aree di esclusione.', 'Geofenced Variable Power (rules in force since 27 April 2026): 24 dBm EIRP for the access point; PSD limits and exclusion zones also apply.'],
+  'fcc-gvp6-client.label': ['6 GHz GVP, client (U-NII-5 e U-NII-7)', '6 GHz GVP, client (U-NII-5 and U-NII-7)'],
+  'fcc-gvp6-client.note': ['Geofenced Variable Power: 18 dBm EIRP per il client; valgono anche i limiti PSD.', 'Geofenced Variable Power: 18 dBm EIRP for the client; PSD limits also apply.'],
+  'fcc-vlp6.label': ['6 GHz VLP (5925–7125 MHz)', '6 GHz VLP (5925–7125 MHz)'],
+  'fcc-vlp6.note': ['Very Low Power: 14 dBm EIRP e −5 dBm/MHz, anche all’esterno, senza AFC, su tutta la banda 5925–7125 MHz (FCC 24-125).', 'Very Low Power: 14 dBm EIRP and −5 dBm/MHz, outdoors too, without AFC, across the whole 5925–7125 MHz band (FCC 24-125).'],
 });
 
 add('rf.', {

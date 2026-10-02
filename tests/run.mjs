@@ -1081,7 +1081,7 @@ test('limiti EIRP indicativi per banda', () => {
 test('normative: ETSI e FCC, bande separate e limiti FCC', () => {
   const ids = (reg) => bandsFor(reg).map((b) => b.id);
   assert.deepEqual(ids('etsi'), ['', '2g4', 'unii1', 'unii2a', 'unii2a-notpc', 'unii2c', 'unii2c-notpc', 'srd58', 'lpi6', 'vlp6']);
-  assert.deepEqual(ids('fcc'), ['', 'fcc-2g4', 'fcc-unii1', 'fcc-unii1-client', 'fcc-unii2a', 'fcc-unii2c', 'fcc-unii3', 'fcc-lpi6-ap', 'fcc-lpi6-client', 'fcc-sp6', 'fcc-vlp6']);
+  assert.deepEqual(ids('fcc'), ['', 'fcc-2g4', 'fcc-unii1', 'fcc-unii1-client', 'fcc-unii2a', 'fcc-unii2c', 'fcc-unii3', 'fcc-lpi6-ap', 'fcc-lpi6-client', 'fcc-sp6-ap', 'fcc-sp6-client', 'fcc-gvp6-ap', 'fcc-gvp6-client', 'fcc-vlp6']);
   // limiti FCC come EIRP equivalente (condotta + 6 dBi) o EIRP diretto a 6 GHz
   const limit = (id) => bandCheck(0, id).limit;
   assert.equal(limit('fcc-2g4'), 36, '§15.247: 30 dBm + 6 dBi');
@@ -1092,7 +1092,10 @@ test('normative: ETSI e FCC, bande separate e limiti FCC', () => {
   assert.equal(limit('fcc-unii3'), 36);
   assert.equal(limit('fcc-lpi6-ap'), 30);
   assert.equal(limit('fcc-lpi6-client'), 24);
-  assert.equal(limit('fcc-sp6'), 36);
+  assert.equal(limit('fcc-sp6-ap'), 36, 'Standard Power AP e fixed client');
+  assert.equal(limit('fcc-sp6-client'), 30, 'Standard Power client');
+  assert.equal(limit('fcc-gvp6-ap'), 24, 'GVP AP');
+  assert.equal(limit('fcc-gvp6-client'), 18, 'GVP client');
   assert.equal(limit('fcc-vlp6'), 14);
   assert.equal(bandCheck(25, 'fcc-2g4').ok, true, '25 dBm: oltre ETSI, entro FCC');
   assert.equal(bandCheck(25, '2g4').ok, false);
@@ -1102,7 +1105,9 @@ test('normative: ETSI e FCC, bande separate e limiti FCC', () => {
   assert.equal(bandChannels('fcc-unii2c').text, '100–144 (12)');
   assert.equal(bandChannels('fcc-unii3').text, '149–165 (5)');
   assert.equal(bandChannels('fcc-lpi6-ap').text, '1–233 (59)');
-  assert.equal(bandChannels('fcc-sp6').text, '1–93, 117–181 (41)');
+  assert.equal(bandChannels('fcc-sp6-ap').text, '1–93, 117–181 (41)');
+  assert.equal(bandChannels('fcc-gvp6-client').text, '1–93, 117–181 (41)');
+  assert.equal(bandChannels('fcc-vlp6').text, '1–233 (59)', 'VLP su tutta la banda (FCC 24-125)');
   for (const id of ids('fcc').slice(1)) {
     const { list } = bandChannels(id);
     const base = id === 'fcc-2g4' ? 2407 : id.includes('6') && !id.includes('unii') ? 5950 : 5000;
@@ -1124,7 +1129,7 @@ test('cambio normativa: banda equivalente e normativa dalla banda', () => {
   assert.equal(equivalentBand('srd58', 'fcc'), 'fcc-unii3');
   assert.equal(equivalentBand('lpi6', 'fcc'), 'fcc-lpi6-ap');
   assert.equal(equivalentBand('fcc-unii1-client', 'etsi'), 'unii1');
-  assert.equal(equivalentBand('fcc-sp6', 'etsi'), 'lpi6');
+  assert.equal(equivalentBand('fcc-sp6-client', 'etsi'), 'lpi6');
   assert.equal(equivalentBand('fcc-vlp6', 'etsi'), 'vlp6');
   assert.equal(equivalentBand('fcc-unii3', 'fcc'), 'fcc-unii3', 'stessa normativa: invariata');
   assert.equal(equivalentBand('', 'fcc'), '', 'nessuna verifica resta tale');
