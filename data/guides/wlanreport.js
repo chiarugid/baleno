@@ -69,7 +69,7 @@ Query delle informazioni utente in corso ...
 Query dei dispositivi di rete in corso ...
 
 Report scritto in: C:\\ProgramData\\Microsoft\\Windows\\WlanReport\\wlan-report-latest.html
-fatto.`, caption: ['Output di esempio (Windows 11 in italiano).', 'Sample output (Windows 11 in Italian; on an English Windows the messages are in English).'] },
+fatto.`, lang: 'it', caption: ['Output di esempio (Windows 11 in italiano).', 'Sample output (Windows 11 in Italian; on an English Windows the messages are in English).'] },
         { p: ['Varianti utili:', 'Useful variants:'] },
         { code: 'netsh wlan show wlanreport duration="7"', note: ['Rapporto sugli ultimi 7 giorni invece di 3, se il registro eventi conserva ancora quegli eventi.', 'Report on the last 7 days instead of 3, if the event log still holds those events.'] },
         { code: 'netsh wlan show wlanreport ?', note: ['Mostra la sintassi completa: duration, log (un file .etl da usare al posto del registro eventi) e logger (i log da leggere, di default WiFiSession e LwtNetLog).', 'Shows the full syntax: duration, log (an .etl file to use instead of the event log) and logger (the logs to read, by default WiFiSession and LwtNetLog).'] },

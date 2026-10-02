@@ -96,8 +96,9 @@ function blockView(block) {
   if (block.list) return h('ul', { class: 'guide-list' }, block.list.map((item) => h('li', null, L(item))));
   if (block.code) return codeBlock(block);
   if (block.console) {
+    // lang: lingua dell'output reale (es. Windows in italiano), indipendente dalla lingua del sito
     return h('figure', { class: 'guide-console' },
-      h('pre', null, h('code', null, block.console)),
+      h('pre', { lang: block.lang ?? null }, h('code', null, block.console)),
       block.caption ? h('figcaption', null, L(block.caption)) : null);
   }
   if (block.table) return tableBlock(block.table);
