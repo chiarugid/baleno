@@ -9,7 +9,7 @@ Strumenti di rete e VoIP che girano interamente nel browser, pubblicati su [www.
 - **Tabella DSCP/CoS/ToS** con PHB, classe di servizio e uso tipico, più convertitore DSCP ↔ ToS ↔ IP Precedence
 - **Stima MOS (E-model)**: fattore R e MOS secondo ITU-T G.107 da codec, ritardo one-way (anche per componenti), perdita e fattore A; categorie G.109 e soglia G.114
 - **Tester pattern CUCM**: route/translation pattern (X, !, [2-9], [^…], ., #, *, \+, ?, +) contro un numero chiamato, con Discard Digits (PreDot, Trailing-#), strip, transform mask e prefisso spiegati passo per passo; macro @ dichiarata non supportata
-- **dBm / mW / EIRP**: conversioni di potenza, EIRP con limiti ETSI indicativi, budget di collegamento in spazio libero (FSPL, margine, distanza massima)
+- **dBm / mW / EIRP**: conversioni di potenza, EIRP con limiti ETSI indicativi e canali da 20 MHz di ogni banda, budget di collegamento in spazio libero (FSPL, margine, distanza massima)
 - **Convertitore MAC**: formati Cisco, due punti, trattini, senza separatori; produttore da un sottoinsieme OUI locale; indirizzi speciali (HSRP, VRRP, multicast…); conversione multipla
 - **Decoder certificati**: certificati X.509 e CSR PKCS#10 in PEM o DER (anche catene e file): soggetto, emittente, validità e giorni rimanenti, serial, algoritmi di firma e chiave, SAN, Key Usage, EKU, Basic Constraints, SKI/AKI, CRL/OCSP, impronte SHA-1/SHA-256 e pin SPKI; avvisi su scadenza, firme deboli e SAN mancanti. Parser DER scritto per il sito (`js/lib/`), impronte con Web Crypto; le chiavi private incollate vengono segnalate e mai lette
 

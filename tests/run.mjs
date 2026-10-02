@@ -9,7 +9,7 @@ import { SIP_CODES, Q850, SIP_TO_Q850, Q850_TO_SIP } from '../data/sip-codes.js'
 import { dscpInfo, parseValue, findPoint, TABLE_ROWS } from '../js/tools/dscp.js';
 import { emodel, rToMos, delayImpairment, effectiveIe, oneWayDelay, category, R0 } from '../js/tools/mos.js';
 import { parsePattern, matchPattern, testPattern, applyMask, patternCount } from '../js/tools/cucm.js';
-import { dbmToMw, mwToDbm, eirp, fspl, linkBudget, bandCheck, parseNumber, formatPower, formatDistance } from '../js/tools/rf-power.js';
+import { dbmToMw, mwToDbm, eirp, fspl, linkBudget, bandCheck, bandChannels, bandLabel, parseNumber, formatPower, formatDistance } from '../js/tools/rf-power.js';
 import { parseMac, formatMac, lookupVendor, macInfo, specialAddress, eui64LinkLocal, extractMacs, OUI_COUNT } from '../js/tools/mac.js';
 
 let passed = 0;
@@ -1075,6 +1075,29 @@ test('limiti EIRP indicativi per banda', () => {
   assert.equal(bandCheck(23, 'lpi6').ok, true);
   assert.equal(bandCheck(15, 'vlp6').ok, false);
   assert.equal(bandCheck(20, ''), null);
+});
+
+test('canali da 20 MHz nelle etichette delle bande', () => {
+  assert.equal(bandLabel('2g4'), '2,4 GHz (2400–2483,5 MHz) · canali 1–13 (13)');
+  assert.equal(bandLabel('unii1'), '5 GHz U-NII-1 indoor (5150–5250 MHz) · canali 36, 40, 44, 48');
+  assert.equal(bandChannels('unii2a').text, '52, 56, 60, 64');
+  assert.equal(bandChannels('unii2a-notpc').text, '52, 56, 60, 64');
+  assert.equal(bandChannels('unii2c').text, '100–140 (11)', '144 esce da 5725 MHz');
+  assert.equal(bandChannels('srd58').text, '149–173 (7)');
+  assert.equal(bandChannels('lpi6').text, '1–93 (24)', '6 GHz UE fino a 6425 MHz');
+  assert.equal(bandChannels('vlp6').list.length, 24);
+  assert.equal(bandLabel(''), 'Nessuna verifica');
+  assert.equal(bandChannels(''), null);
+  // ogni canale da 20 MHz sta interamente nella banda (centro = base + 5 × canale)
+  for (const id of ['2g4', 'unii1', 'unii2a', 'unii2c', 'srd58', 'lpi6']) {
+    const { list } = bandChannels(id);
+    const base = id === '2g4' ? 2407 : id.endsWith('6') ? 5950 : 5000;
+    const [lo, hi] = bandCheck(0, id).band.range;
+    for (const c of list) {
+      const centre = base + 5 * c;
+      assert.ok(centre - 10 >= lo - 1 && centre + 10 <= hi + 1, `${id} canale ${c}`);
+    }
+  }
 });
 
 test('input numerici e formattazione', () => {

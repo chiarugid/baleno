@@ -39,7 +39,21 @@ export function linkBudget({ eirpDbm, distanceKm, freqMHz, rxGainDbi = 0, rxLoss
   return result;
 }
 
-export const bandLabel = (id) => t(`rf.band.${id || 'none'}.label`);
+// Canali da 20 MHz della banda: elenco completo se pochi, altrimenti intervallo e numero.
+export function bandChannels(id) {
+  const band = BANDS.find((b) => b.id === id);
+  if (!band?.channels) return null;
+  const [first, last, step] = band.channels;
+  const list = [];
+  for (let c = first; c <= last; c += step) list.push(c);
+  return { list, text: list.length <= 4 ? list.join(', ') : `${first}–${last} (${list.length})` };
+}
+
+export function bandLabel(id) {
+  const label = t(`rf.band.${id || 'none'}.label`);
+  const ch = bandChannels(id);
+  return ch ? `${label} · ${t('rf.channelList', { list: ch.text })}` : label;
+}
 
 export function bandCheck(eirpDbm, bandId) {
   const found = BANDS.find((b) => b.id === bandId && b.eirp != null);

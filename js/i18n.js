@@ -856,6 +856,7 @@ add('rf.band.', {
 });
 
 add('rf.', {
+  channelList: ['canali {list}', 'channels {list}'],
   conversion: ['Conversione', 'Conversion'],
   power: ['Potenza', 'Power'],
   convHint: ['P(mW) = 10^(dBm/10). Modifica un campo qualsiasi: gli altri si aggiornano.', 'P(mW) = 10^(dBm/10). Edit any field: the others update.'],
