@@ -10,7 +10,7 @@ import { dscpInfo, parseValue, findPoint, TABLE_ROWS } from '../js/tools/dscp.js
 import { emodel, rToMos, delayImpairment, effectiveIe, oneWayDelay, category, R0 } from '../js/tools/mos.js';
 import { parsePattern, matchPattern, testPattern, applyMask, patternCount } from '../js/tools/cucm.js';
 import { BANDS as BANDS_ALL } from '../data/rf-limits.js';
-import { rxAtMeters, fsplProfile, RANGES } from '../js/tools/rf-chart.js';
+import { rxAtMeters, fsplProfile, RANGES, pathLoss, distanceAt, ENVIRONMENTS } from '../js/tools/rf-chart.js';
 import { dbmToMw, mwToDbm, eirp, fspl, linkBudget, bandCheck, bandChannels, bandLabel, bandsFor, equivalentBand, regulationOf, parseNumber, formatPower, formatDistance } from '../js/tools/rf-power.js';
 import { parseMac, formatMac, lookupVendor, macInfo, specialAddress, eui64LinkLocal, extractMacs, OUI_COUNT } from '../js/tools/mac.js';
 
@@ -1157,6 +1157,33 @@ test('grafico FSPL: potenza a una distanza e curva', () => {
   near(curve[199].m, 100, 1e-12);
   assert.ok(curve.every((p, i) => i === 0 || p.rxDbm < curve[i - 1].rxDbm), 'monotona decrescente');
   assert.deepEqual(RANGES, [20, 100, 500, 2000, 10000]);
+});
+
+test('modello ambiente: log-distanza con esponente n e pareti', () => {
+  const link = { eirpDbm: 20, freqMHz: 2437, rxGainDbi: 2, rxLossDb: 0 };
+  const ref = pathLoss(1, 2437).fspl;
+  near(ref, 40.18, 0.01, 'FSPL a 1 m, 2437 MHz');
+  // n = 2 coincide con lo spazio libero a ogni distanza
+  for (const d of [0.5, 1, 20, 100, 1234]) near(pathLoss(d, 2437, { n: 2 }).total, pathLoss(d, 2437).fspl, 1e-9, `n = 2 a ${d} m`);
+  // 100 m: n = 2,5 / 3 / 3,5 → −68,2 / −78,2 / −88,2 dBm (stessi valori della tabella in chat)
+  near(rxAtMeters(link, 100, { n: 2.5 }).rxDbm, -68.18, 0.01);
+  near(rxAtMeters(link, 100, { n: 3 }).rxDbm, -78.18, 0.01);
+  near(rxAtMeters(link, 100, { n: 3.5 }).rxDbm, -88.18, 0.01);
+  near(rxAtMeters(link, 100, { n: 3 }).rxFree, -58.18, 0.01, 'riferimento spazio libero');
+  // pareti: 2 × 4 dB
+  const w = rxAtMeters(link, 20, { n: 3, walls: 2, wallLoss: 4 });
+  near(w.wallsLoss, 8, 1e-12);
+  near(w.total, ref + 30 * Math.log10(20) + 8, 1e-9);
+  // entro 1 m spazio libero anche con n alto
+  near(pathLoss(0.5, 2437, { n: 3.5 }).distanceLoss, pathLoss(0.5, 2437).fspl, 1e-9);
+  // distanza all'RSSI di progetto −67 dBm: 276 / 90 / 42 / 25 m
+  near(distanceAt(link, { n: 2 }, -67), 276, 1);
+  near(distanceAt(link, { n: 2.5 }, -67), 90, 1);
+  near(distanceAt(link, { n: 3 }, -67), 42, 1);
+  near(distanceAt(link, { n: 3.5 }, -67), 25, 1);
+  near(rxAtMeters(link, distanceAt(link, { n: 3, walls: 3, wallLoss: 10 }, -67), { n: 3, walls: 3, wallLoss: 10 }).rxDbm, -67, 1e-6, 'coerente con la curva');
+  assert.equal(distanceAt(link, { n: 3, walls: 10, wallLoss: 40 }, -67), null, 'pareti che bloccano tutto');
+  assert.deepEqual(ENVIRONMENTS.map((e) => e.n), [2, 2.5, 3, 3.5, null]);
 });
 
 test('canali da 20 MHz nelle etichette delle bande', () => {

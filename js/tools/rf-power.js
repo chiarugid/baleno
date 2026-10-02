@@ -353,7 +353,7 @@ export function render(container, params, ctx) {
   grx.input.value = v('grx');
   lrx.input.value = v('lrx');
   sens.input.value = params.has('rssi') ? params.get('rssi') : DEFAULTS.rssi;
-  chart.init(Number(params.get('gr')), Number(params.get('gd') ?? 50));
+  chart.init(params);
   fromDbm();
   update();
 }

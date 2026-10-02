@@ -659,3 +659,12 @@ fieldset.field--plain legend { padding: 0; margin-bottom: 4px; }
   .kpis--3 > :last-child { grid-column: auto; }
 }
 .fspl-steps { margin: -6px 0 4px; color: var(--text-muted); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+@media (min-width: 640px) {
+  .field-row--env { grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); }
+}
+.input:disabled { opacity: 0.65; }
+.fspl-line--ref { stroke: var(--text-subtle); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.fspl-legend { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 10px; color: var(--text-muted); font-size: var(--fs-sm); }
+.fspl-legend:empty { display: none; }
+.fspl-legend__item { display: inline-flex; align-items: center; gap: 6px; }
+.fspl-legend__swatch { flex: none; overflow: visible; }
