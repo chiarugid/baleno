@@ -13,6 +13,8 @@ Strumenti di rete e VoIP che girano interamente nel browser, pubblicati su [www.
 - **Convertitore MAC**: formati Cisco, due punti, trattini, senza separatori; produttore da un sottoinsieme OUI locale; indirizzi speciali (HSRP, VRRP, multicast…); conversione multipla
 - **Decoder certificati**: certificati X.509 e CSR PKCS#10 in PEM o DER (anche catene e file): soggetto, emittente, validità e giorni rimanenti, serial, algoritmi di firma e chiave, SAN, Key Usage, EKU, Basic Constraints, SKI/AKI, CRL/OCSP, impronte SHA-1/SHA-256 e pin SPKI; avvisi su scadenza, firme deboli e SAN mancanti. Parser DER scritto per il sito (`js/lib/`), impronte con Web Crypto; le chiavi private incollate vengono segnalate e mai lette
 
+**Avvertenza:** tutti i risultati e i valori di riferimento (limiti di potenza, codifiche, tabelle, stime) sono indicativi e possono contenere errori o non essere aggiornati. Vanno sempre ricontrollati da chi usa gli strumenti, sulle fonti ufficiali, prima di qualsiasi uso reale. Il sito lo ricorda in cima a ogni strumento, nella sidebar e nelle Informazioni.
+
 HTML, CSS e JavaScript vanilla: nessun build step, nessun backend, nessuna chiamata esterna, nessun tracking.
 
 ## Lingue

@@ -329,8 +329,10 @@ function setCrumbs(items) {
       : h('a', { href: item.href }, item.title)))));
 }
 
+// Ogni pagina con risultati ricorda che sono indicativi e vanno verificati da chi li usa.
 function pageHead(title, description) {
-  return h('div', { class: 'page-head' }, h('h1', null, title), description ? h('p', null, description) : null);
+  return h('div', { class: 'page-head' }, h('h1', null, title), description ? h('p', null, description) : null,
+    h('p', { class: 'disclaimer', role: 'note' }, icon('info'), h('span', null, t('app.disclaimer'))));
 }
 
 async function toolCard(tool) {

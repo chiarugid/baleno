@@ -353,3 +353,21 @@ h1, h2, h3 { margin: 0; line-height: 1.3; }
   .topbar .visits--header { display: none; }
   .sidebar__foot .visits--sidebar:not([hidden]) { display: block; }
 }
+
+/* Avvertenza: risultati indicativi, da verificare da parte di chi usa gli strumenti */
+.disclaimer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  max-width: 70ch;
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--warn);
+  border-radius: 4px;
+  background: var(--warn-soft);
+  color: var(--text);
+  font-size: var(--fs-sm);
+}
+.page-head .disclaimer { margin-top: 10px; color: var(--text); }
+.disclaimer .icon { margin-top: 1px; color: var(--warn); }
+.sidebar__disclaimer { color: inherit; font-weight: 600; }
