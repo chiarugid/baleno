@@ -10,7 +10,8 @@ export const REGULATIONS = ['etsi', 'fcc'];
 export const BANDS = [
   { id: '' },
 
-  // ETSI / decisioni CE (Europa)
+  // ETSI / UE: Decisione 2022/2307 (5 GHz), Decisione 2021/1067 consolidata al 22/5/2025 (6 GHz),
+  // ETSI EN 300 328 (2,4 GHz), EN 301 893 (5 GHz), EN 300 440 (SRD 5,8 GHz)
   { id: '2g4', reg: 'etsi', range: [2400, 2483.5], channels: [[1, 13, 1]], eirp: 20, match: 'fcc-2g4' },
   { id: 'unii1', reg: 'etsi', range: [5150, 5250], channels: [[36, 48, 4]], eirp: 23, match: 'fcc-unii1' },
   { id: 'unii2a', reg: 'etsi', range: [5250, 5350], channels: [[52, 64, 4]], eirp: 23, match: 'fcc-unii2a' },
