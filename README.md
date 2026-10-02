@@ -17,6 +17,10 @@ Strumenti di rete e VoIP che girano interamente nel browser, pubblicati su [www.
 
 HTML, CSS e JavaScript vanilla: nessun build step, nessun backend, nessuna chiamata esterna, nessun tracking.
 
+## Strumenti esterni
+
+La sezione **Strumenti esterni** raccoglie link a strumenti utili di altri autori, che si aprono sui loro siti in una nuova scheda; il sito non carica nulla da quei domini. Per ora: Cisco **Wireless Config Analyzer Express (WCAE)**, versione cloud (`cway.cisco.com`), con l'avviso che quella versione carica il file sui server Cisco. I link sono in `EXTERNAL` di `js/app.js`, i testi in `ext.*` di `js/i18n.js`.
+
 ## Lingue
 
 Interfaccia in italiano e inglese (selettore IT/EN nell'header). Tutte le stringhe stanno in `js/i18n.js`, una chiave con entrambe le lingue; i termini tecnici di protocollo restano in inglese. La lingua si sceglie da:

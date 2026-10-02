@@ -135,6 +135,8 @@ add('section.', {
   'l2.desc': ['Formati degli indirizzi MAC e produttori (OUI).', 'MAC address formats and vendors (OUI).'],
   'sicurezza.title': ['Sicurezza', 'Security'],
   'sicurezza.desc': ['Lettura di certificati X.509 e richieste CSR.', 'Reading X.509 certificates and CSRs.'],
+  'esterni.title': ['Strumenti esterni', 'External tools'],
+  'esterni.desc': ['Strumenti utili di altri autori. Si aprono sui loro siti, in una nuova scheda: non fanno parte di rebluc e non girano nel tuo browser come gli strumenti di questo sito.', 'Useful tools by other authors. They open on their own sites, in a new tab: they are not part of rebluc and do not run in your browser like the tools on this site.'],
 });
 
 add('tool.', {
@@ -1229,6 +1231,29 @@ add('cert.', {
   'w.certSignNotCa': ['keyCertSign presente ma Basic Constraints non indica una CA.', 'keyCertSign is set but Basic Constraints does not mark a CA.'],
   'w.extError': ['Estensione {ext} non decodificabile.', 'Extension {ext} could not be decoded.'],
   'w.unknownCritical': ['Estensione critica {ext} non riconosciuta da questo strumento.', 'Critical extension {ext} not recognised by this tool.'],
+});
+
+// ================================================================ Strumenti esterni
+
+add('ext.', {
+  disclaimer: ['Link a servizi di terze parti: condizioni, privacy e affidabilità dei risultati dipendono dai loro autori. Verifica sempre i risultati, come per ogni strumento.', 'Links to third-party services: terms, privacy and the reliability of results depend on their authors. Always verify the results, as with any tool.'],
+  notAffiliated: ['Strumento di {vendor}: rebluc non è affiliato né responsabile del servizio.', 'A {vendor} tool: rebluc is not affiliated with or responsible for the service.'],
+  newTab: ['si apre in una nuova scheda', 'opens in a new tab'],
+  'label.input': ['Cosa analizza', 'What it analyses'],
+  'label.output': ['Cosa restituisce', 'What it returns'],
+  'label.versions': ['Versioni', 'Versions'],
+  'wcae.title': ['Wireless Config Analyzer Express (WCAE)', 'Wireless Config Analyzer Express (WCAE)'],
+  'wcae.short': ['Cisco WCAE', 'Cisco WCAE'],
+  'wcae.vendor': ['Cisco', 'Cisco'],
+  'wcae.keywords': ['wlc controller wireless cisco aireos ios-xe 9800 configurazione analisi best practice rf wcae', 'wlc controller wireless cisco aireos ios-xe 9800 configuration analysis best practice rf wcae'],
+  'wcae.desc': ['Analizza la configurazione dei wireless controller Cisco e segnala errori di configurazione, scostamenti dalle best practice e problemi RF tipici.', 'Analyses the configuration of Cisco wireless controllers and flags configuration errors, deviations from best practice and typical RF problems.'],
+  'wcae.input': ['l’output di show run-config (AireOS 8.0 e successivi) o di show tech wireless (Catalyst 9800, IOS-XE 16.11 e successivi), un controller alla volta.', 'the output of show run-config (AireOS 8.0 and later) or show tech wireless (Catalyst 9800, IOS-XE 16.11 and later), one controller at a time.'],
+  'wcae.output': ['circa 190 controlli automatici, punteggio sulle best practice, statistiche RF, canali, AP e vicini, verifiche FlexConnect.', 'about 190 automatic checks, best-practice score, RF statistics, channels, APs and neighbours, FlexConnect checks.'],
+  'wcae.versions': ['cloud (carichi il file e ricevi un riepilogo) e applicazione desktop per macOS e Windows, più dettagliata e offline.', 'cloud (upload the file and get a summary) and desktop app for macOS and Windows, more detailed and offline.'],
+  'wcae.privacy': ['La versione cloud carica il file sui server Cisco: a differenza degli strumenti di rebluc, i dati lasciano il dispositivo. Prima di caricarlo togli password, chiavi e dati sensibili, oppure usa la versione desktop.', 'The cloud version uploads the file to Cisco servers: unlike rebluc tools, the data leaves your device. Remove passwords, keys and sensitive data before uploading, or use the desktop version.'],
+  'wcae.open': ['Apri la versione cloud', 'Open the cloud version'],
+  'wcae.desktop': ['Versioni desktop (GitHub)', 'Desktop versions (GitHub)'],
+  'wcae.docs': ['Documentazione', 'Documentation'],
 });
 
 // ================================================================ fine dizionario

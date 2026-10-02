@@ -28,6 +28,19 @@ const TOOLS = [
   { id: 'certificati', section: 'sicurezza', load: () => import('./tools/certs.js') },
 ];
 
+// Strumenti di terze parti: solo link, aperti in una nuova scheda; nessuna risorsa caricata da fuori.
+const EXTERNAL_SECTION = { id: 'esterni', icon: 'external' };
+const EXTERNAL = [
+  {
+    id: 'wcae',
+    url: 'https://cway.cisco.com/tools/WirelessAnalyzer/',
+    links: [
+      { key: 'desktop', url: 'https://github.com/CiscoDevNet/wcae' },
+      { key: 'docs', url: 'https://developer.cisco.com/docs/wireless-troubleshooting-tools/' },
+    ],
+  },
+];
+
 const sectionById = Object.fromEntries(SECTIONS.map((s) => [s.id, s]));
 const toolPath = (tool) => `#/${tool.section}/${tool.id}`;
 const sectionTitle = (s) => t(`section.${s.id}.title`);
@@ -96,6 +109,11 @@ function buildNav() {
       h('ul', null, tools.map((tool) => h('li', null,
         h('a', { class: 'nav__sublink', href: toolPath(tool), dataset: { route: `${section.id}/${tool.id}` } }, toolTitle(tool)))))));
   }
+  items.push(h('li', null,
+    h('a', { class: 'nav__link', href: `#/${EXTERNAL_SECTION.id}`, dataset: { route: EXTERNAL_SECTION.id }, title: t('section.esterni.title') },
+      icon(EXTERNAL_SECTION.icon), h('span', { class: 'nav__label' }, t('section.esterni.title'))),
+    h('ul', null, EXTERNAL.map((ext) => h('li', null,
+      h('a', { class: 'nav__sublink', href: `#/${EXTERNAL_SECTION.id}`, dataset: { route: `${EXTERNAL_SECTION.id}/${ext.id}` } }, t(`ext.${ext.id}.short`)))))));
   navEl.replaceChildren(...items);
 }
 
@@ -232,14 +250,21 @@ const normalize = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''
 function searchTools(query) {
   const words = normalize(query).split(/\s+/).filter(Boolean);
   if (!words.length) return [];
-  return TOOLS.filter((tool) => {
+  const external = EXTERNAL.filter((ext) => {
+    const hay = normalize([tAll(`ext.${ext.id}.title`), tAll('section.esterni.title'), tAll(`ext.${ext.id}.keywords`)].join(' '));
+    return words.every((w) => hay.includes(w));
+  }).map((ext) => ({ id: ext.id, section: EXTERNAL_SECTION.id, external: true }));
+  return [...TOOLS.filter((tool) => {
     const hay = normalize([
       tAll(`tool.${tool.id}.title`), tAll(`section.${tool.section}.title`),
       tAll(`tool.${tool.id}.keywords`), tAll(`tool.${tool.id}.desc`),
     ].join(' '));
     return words.every((w) => hay.includes(w));
-  });
+  }), ...external];
 }
+
+const hitTitle = (hit) => (hit.external ? t(`ext.${hit.id}.short`) : toolTitle(hit));
+const hitSection = (hit) => (hit.external ? t('section.esterni.title') : sectionTitle(sectionById[hit.section]));
 
 function renderSearch() {
   const query = searchInput.value.trim();
@@ -249,7 +274,7 @@ function renderSearch() {
   const items = searchHits.map((tool, i) => h('li', {
     id: `sr-${tool.id}`, role: 'option', 'aria-selected': String(i === searchIndex),
     onmousedown: (e) => { e.preventDefault(); openHit(tool); },
-  }, h('span', null, toolTitle(tool)), h('span', { class: 'sr-section' }, sectionTitle(sectionById[tool.section]))));
+  }, h('span', null, hitTitle(tool)), h('span', { class: 'sr-section' }, hitSection(tool))));
   if (!items.length) items.push(h('li', { class: 'sr-empty', role: 'presentation' }, t('app.searchNone')));
   searchList.replaceChildren(...items);
   searchList.hidden = false;
@@ -275,7 +300,7 @@ function openHit(tool) {
   closeSearch();
   root.classList.remove('search-open');
   searchInput.blur();
-  location.hash = toolPath(tool);
+  location.hash = tool.external ? `#/${EXTERNAL_SECTION.id}` : toolPath(tool);
 }
 
 searchInput.addEventListener('input', renderSearch);
@@ -400,6 +425,32 @@ async function renderTool(section, tool, params) {
   return [head, holder, () => mod.render(holder, params, ctx)];
 }
 
+function externalCard(ext) {
+  const card = dashlet({ title: t(`ext.${ext.id}.title`), subtitle: t(`ext.${ext.id}.vendor`), expandable: false, className: 'dashlet--ext' });
+  const linkAttrs = (url) => ({ href: url, target: '_blank', rel: 'noopener noreferrer' });
+  card.body.append(
+    h('p', { style: 'margin:0 0 10px' }, t(`ext.${ext.id}.desc`)),
+    h('ul', { class: 'ext-facts' }, ['input', 'output', 'versions'].map((k) => h('li', null, h('strong', null, `${t(`ext.label.${k}`)}: `), t(`ext.${ext.id}.${k}`)))),
+    h('ul', { class: 'notes' },
+      h('li', { class: 'note note--warn' }, t(`ext.${ext.id}.privacy`)),
+      h('li', { class: 'note' }, t('ext.notAffiliated', { vendor: t(`ext.${ext.id}.vendor`) }))),
+    h('div', { class: 'form-actions ext-actions' },
+      h('a', { class: 'btn btn--primary', ...linkAttrs(ext.url) }, t(`ext.${ext.id}.open`), icon('external'), h('span', { class: 'visually-hidden' }, ` (${t('ext.newTab')})`)),
+      ext.links.map((l) => h('a', { class: 'btn btn--secondary', ...linkAttrs(l.url) }, t(`ext.${ext.id}.${l.key}`), icon('external'), h('span', { class: 'visually-hidden' }, ` (${t('ext.newTab')})`)))));
+  card.el.id = `ext-${ext.id}`;
+  return card.el;
+}
+
+function renderExternal() {
+  setCrumbs([{ title: t('section.esterni.title') }]);
+  document.title = `${t('section.esterni.title')} · rebluc`;
+  return [
+    h('div', { class: 'page-head' }, h('h1', null, t('section.esterni.title')), h('p', null, t('section.esterni.desc')),
+      h('p', { class: 'disclaimer', role: 'note' }, icon('info'), h('span', null, t('ext.disclaimer')))),
+    h('div', { class: 'dash-grid' }, EXTERNAL.map(externalCard)),
+  ];
+}
+
 function renderNotFound() {
   setCrumbs([{ title: t('app.dashboard'), href: '#/' }, { title: t('app.notFound') }]);
   document.title = `${t('app.notFound')} · rebluc`;
@@ -430,6 +481,7 @@ async function route({ focus = true } = {}) {
   let nodes;
   try {
     if (!sectionId) { nodes = await renderDashboard(); updateNav(null, null); }
+    else if (sectionId === EXTERNAL_SECTION.id && !toolId) { nodes = renderExternal(); updateNav(EXTERNAL_SECTION.id, null); }
     else if (section && !toolId) { nodes = await renderSection(section); updateNav(section.id, null); }
     else if (tool && !rest.length) { nodes = await renderTool(section, tool, params); updateNav(section.id, tool.id); }
     else { nodes = renderNotFound(); updateNav('-', null); }

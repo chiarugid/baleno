@@ -668,3 +668,11 @@ fieldset.field--plain legend { padding: 0; margin-bottom: 4px; }
 .fspl-legend:empty { display: none; }
 .fspl-legend__item { display: inline-flex; align-items: center; gap: 6px; }
 .fspl-legend__swatch { flex: none; overflow: visible; }
+
+/* ---------- Strumenti esterni ---------- */
+
+.ext-facts { margin: 0 0 4px; padding-left: 18px; font-size: var(--fs-sm); }
+.ext-facts li { margin: 3px 0; }
+.ext-actions { flex-wrap: wrap; gap: 8px; }
+.ext-actions .btn { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.ext-actions .icon { width: 15px; height: 15px; }
