@@ -135,6 +135,8 @@ add('section.', {
   'l2.desc': ['Formati degli indirizzi MAC e produttori (OUI).', 'MAC address formats and vendors (OUI).'],
   'sicurezza.title': ['Sicurezza', 'Security'],
   'sicurezza.desc': ['Lettura di certificati X.509 e richieste CSR.', 'Reading X.509 certificates and CSRs.'],
+  'guide.title': ['Guide pratiche', 'How-to guides'],
+  'guide.desc': ['Procedure passo per passo, con comandi da copiare, esempi di risultato e cosa controllare.', 'Step-by-step procedures, with commands to copy, sample results and what to check.'],
   'esterni.title': ['Strumenti esterni', 'External tools'],
   'esterni.desc': ['Strumenti utili di altri autori. Si aprono sui loro siti, in una nuova scheda: non fanno parte di rebluc e non girano nel tuo browser come gli strumenti di questo sito.', 'Useful tools by other authors. They open on their own sites, in a new tab: they are not part of rebluc and do not run in your browser like the tools on this site.'],
 });
@@ -1231,6 +1233,20 @@ add('cert.', {
   'w.certSignNotCa': ['keyCertSign presente ma Basic Constraints non indica una CA.', 'keyCertSign is set but Basic Constraints does not mark a CA.'],
   'w.extError': ['Estensione {ext} non decodificabile.', 'Extension {ext} could not be decoded.'],
   'w.unknownCritical': ['Estensione critica {ext} non riconosciuta da questo strumento.', 'Critical extension {ext} not recognised by this tool.'],
+});
+
+// ================================================================ Guide pratiche
+
+add('guide.', {
+  disclaimer: ['Procedure indicative: verificale sulla documentazione ufficiale e sulla versione di sistema o software che usi. Chi le applica è responsabile delle verifiche.', 'Indicative procedures: check them against the official documentation and the system or software version you use. Whoever applies them is responsible for verifying them.'],
+  minutes: ['{n} minuti', '{n} minutes'],
+  read: ['Leggi la guida', 'Read the guide'],
+  toc: ['Indice della guida', 'Guide contents'],
+  sources: ['Fonti', 'Sources'],
+  copyCommand: ['Copia il comando', 'Copy the command'],
+  copied: ['Comando copiato', 'Command copied'],
+  mockBadge: ['Esempio con dati inventati', 'Example with made-up data'],
+  mockCaption: ['Ricostruzione semplificata delle sezioni principali del rapporto, con dati inventati. Il rapporto reale ha lo stesso ordine e le stesse intestazioni in inglese; i messaggi sono nella lingua di Windows.', 'Simplified rebuild of the main report sections, with made-up data. The real report has the same order and English headings; messages are in the Windows language.'],
 });
 
 // ================================================================ Strumenti esterni

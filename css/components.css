@@ -676,3 +676,55 @@ fieldset.field--plain legend { padding: 0; margin-bottom: 4px; }
 .ext-actions { flex-wrap: wrap; gap: 8px; }
 .ext-actions .btn { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
 .ext-actions .icon { width: 15px; height: 15px; }
+
+/* ---------- Guide pratiche ---------- */
+
+.guide { max-width: 860px; }
+.guide-meta { color: var(--text-muted); font-size: var(--fs-sm); }
+.guide-toc { margin: 4px 0 20px; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.guide-toc ol { margin: 0; padding-left: 20px; }
+.guide-toc li { margin: 3px 0; }
+.guide-section { margin: 0 0 24px; }
+.guide-section h2 { margin: 0 0 10px; font-size: var(--fs-lg); font-weight: 600; }
+.guide-section p { margin: 0 0 10px; line-height: 1.6; }
+.guide-list { margin: 0 0 10px; padding-left: 20px; line-height: 1.6; }
+.guide-list li { margin: 4px 0; }
+.guide-code { margin: 0 0 12px; }
+.guide-code__shell { color: var(--text-muted); font-size: var(--fs-xs); margin-bottom: 4px; }
+.guide-code__row { display: flex; align-items: flex-start; gap: 6px; padding: 6px 6px 6px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.guide-code__row pre { flex: 1; min-width: 0; margin: 4px 0; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; }
+.guide-code__note { margin: 4px 0 0 !important; color: var(--text-muted); font-size: var(--fs-sm); }
+.guide-console { margin: 0 0 12px; }
+.guide-console pre { margin: 0; padding: 12px 14px; overflow-x: auto; border-radius: var(--radius); background: #0f1720; color: #d7e0ea; font-family: var(--font-mono); font-size: 12px; line-height: 1.5; }
+.guide-console figcaption, .wr-mock figcaption { margin-top: 6px; color: var(--text-muted); font-size: var(--fs-xs); }
+.guide-table td { vertical-align: top; white-space: normal; }
+.guide-table__key { font-family: var(--font-mono); font-size: var(--fs-sm); white-space: nowrap; }
+@media (max-width: 599px) { .guide-table__key { white-space: normal; overflow-wrap: anywhere; } }
+
+/* Anteprima del rapporto wlanreport (dati inventati) */
+.wr-mock { position: relative; margin: 0 0 12px; padding: 16px; border: 1px dashed var(--border-strong); border-radius: var(--radius); background: var(--surface); }
+.wr-mock h4 { margin: 14px 0 6px; font-size: var(--fs-sm); font-weight: 650; }
+.wr-mock__badge { display: inline-block; margin-bottom: 10px; padding: 2px 8px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-size: var(--fs-xs); font-weight: 600; }
+.wr-chart { display: grid; gap: 4px; }
+.wr-chart__row { display: flex; align-items: center; gap: 8px; font-size: var(--fs-xs); color: var(--text-muted); }
+.wr-chart__label { width: 22px; }
+.wr-chart__bar { height: 10px; border-radius: 2px; }
+.wr-chart__bar--ok { background: var(--ok); }
+.wr-chart__bar--warn { background: var(--warn); }
+.wr-chart__bar--err { background: var(--err); }
+.wr-dot { width: 10px; height: 10px; border-radius: 50%; }
+.wr-dot--err { background: var(--err); }
+.wr-grid { display: grid; gap: 0 24px; }
+@media (min-width: 720px) { .wr-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.wr-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.wr-table td, .wr-table th { padding: 4px 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.wr-table th { color: var(--text-muted); font-weight: 600; }
+.wr-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.wr-bars { display: grid; gap: 4px; font-size: var(--fs-xs); }
+.wr-bars__row { display: grid; grid-template-columns: 110px minmax(0, 1fr) 20px; align-items: center; gap: 8px; }
+.wr-bars__track { height: 10px; border-radius: 2px; background: var(--surface-2); }
+.wr-bars__fill { display: block; height: 100%; border-radius: 2px; background: var(--chart-line); }
+.wr-bars__n { text-align: right; color: var(--text-muted); }
+.wr-events td:first-child { font-family: var(--font-mono); }
+.wr-ev--wlan td:first-child { border-left: 3px solid var(--chart-line); }
+.wr-ev--ncsi td:first-child { border-left: 3px solid var(--ok); }

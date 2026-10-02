@@ -17,6 +17,10 @@ Strumenti di rete e VoIP che girano interamente nel browser, pubblicati su [www.
 
 HTML, CSS e JavaScript vanilla: nessun build step, nessun backend, nessuna chiamata esterna, nessun tracking.
 
+## Guide pratiche
+
+La sezione **Guide pratiche** raccoglie procedure passo per passo con comandi da copiare, esempi di risultato e fonti ufficiali, anch'esse indicative. Ogni guida è un file in `data/guides/` con i testi in coppie italiano/inglese; la resa è in `js/guides.js`. Prima guida: **Rapporto Wi-Fi di Windows** (`netsh wlan show wlanreport`), con l'output reale del comando e un'anteprima del rapporto ricostruita con dati inventati.
+
 ## Strumenti esterni
 
 La sezione **Strumenti esterni** raccoglie link a strumenti utili di altri autori, che si aprono sui loro siti in una nuova scheda; il sito non carica nulla da quei domini. Per ora: Cisco **Wireless Config Analyzer Express (WCAE)**, versione cloud (`cway.cisco.com`), con l'avviso che quella versione carica il file sui server Cisco. I link sono in `EXTERNAL` di `js/app.js`, i testi in `ext.*` di `js/i18n.js`.
@@ -69,6 +73,7 @@ css/           tema (tokens), layout, componenti
 js/app.js      navigazione, tema, lingua, ricerca strumenti
 js/i18n.js     dizionario italiano/inglese e funzioni t()
 js/visits.js   contatore visite locale
+js/guides.js   resa delle guide pratiche (contenuti in data/guides/)
 js/ui/         componenti condivisi (dashlet, tabella, icone)
 js/lib/        parser ASN.1/DER e X.509
 js/tools/      un modulo per strumento: funzioni di calcolo + interfaccia

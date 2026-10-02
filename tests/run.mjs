@@ -1820,5 +1820,38 @@ test('in inglese i testi del decoder non contengono italiano', () => {
   }
 });
 
+console.log('Guide pratiche');
+
+const { GUIDES, guideTexts } = await import('../js/guides.js');
+
+test('guide: ogni testo in italiano e in inglese, nessun italiano nella versione inglese', () => {
+  assert.ok(GUIDES.length >= 1);
+  const ids = new Set();
+  for (const g of GUIDES) {
+    assert.ok(/^[a-z0-9-]+$/.test(g.id) && !ids.has(g.id), `id ${g.id}`);
+    ids.add(g.id);
+    const pairs = guideTexts(g);
+    assert.ok(pairs.length > 40, `${g.id}: ${pairs.length} testi`);
+    for (const [it, en] of pairs) assert.ok(it.trim() && en.trim(), `${g.id}: testo vuoto (${it} / ${en})`);
+    const offenders = pairs.map(([, en]) => en).filter((en) => italianIn(en)).map((en) => `"${italianIn(en)}" in ${en.slice(0, 80)}`);
+    assert.deepEqual(offenders, [], g.id);
+    for (const sec of g.sections) {
+      assert.ok(sec.blocks.length, `${g.id}: sezione vuota`);
+      for (const b of sec.blocks) if ('code' in b) assert.ok(b.code.trim(), `${g.id}: comando vuoto`);
+    }
+    for (const src of g.sources) for (const u of src.url) assert.ok(u.startsWith('https://'), u);
+  }
+});
+
+test('guida wlanreport: comandi e percorsi', () => {
+  const g = GUIDES.find((x) => x.id === 'wlanreport');
+  const codes = g.sections.flatMap((s) => s.blocks).filter((b) => b.code).map((b) => b.code);
+  assert.ok(codes.includes('netsh wlan show wlanreport'));
+  assert.ok(codes.includes('netsh wlan show wlanreport duration="7"'));
+  assert.ok(codes.some((c) => c.includes('\\ProgramData\\Microsoft\\Windows\\WlanReport\\wlan-report-latest.html')));
+  const consoleBlock = g.sections.flatMap((s) => s.blocks).find((b) => b.console);
+  assert.ok(consoleBlock.console.includes('Report scritto in: C:\\ProgramData\\Microsoft\\Windows\\WlanReport\\wlan-report-latest.html'));
+});
+
 console.log(`\n${passed} superati, ${failed} falliti`);
 process.exit(failed ? 1 : 0);

@@ -5,6 +5,7 @@ import { icon } from './ui/icons.js';
 import { dashlet, closeMaximized } from './ui/dashlet.js';
 import { t, tAll, getLang, setLang, resolveLang, isLang } from './i18n.js';
 import { countVisit, browserStorage } from './visits.js';
+import { GUIDES, renderGuide, guideMeta, L } from './guides.js';
 
 const SECTIONS = [
   { id: 'indirizzamento', icon: 'network' },
@@ -27,6 +28,10 @@ const TOOLS = [
   { id: 'mac', section: 'l2', load: () => import('./tools/mac.js') },
   { id: 'certificati', section: 'sicurezza', load: () => import('./tools/certs.js') },
 ];
+
+// Guide pratiche: procedure passo per passo (contenuti in data/guides/).
+const GUIDE_SECTION = { id: 'guide', icon: 'book' };
+const guidePath = (g) => `#/${GUIDE_SECTION.id}/${g.id}`;
 
 // Strumenti di terze parti: solo link, aperti in una nuova scheda; nessuna risorsa caricata da fuori.
 const EXTERNAL_SECTION = { id: 'esterni', icon: 'external' };
@@ -109,6 +114,11 @@ function buildNav() {
       h('ul', null, tools.map((tool) => h('li', null,
         h('a', { class: 'nav__sublink', href: toolPath(tool), dataset: { route: `${section.id}/${tool.id}` } }, toolTitle(tool)))))));
   }
+  items.push(h('li', null,
+    h('a', { class: 'nav__link', href: `#/${GUIDE_SECTION.id}`, dataset: { route: GUIDE_SECTION.id }, title: t('section.guide.title') },
+      icon(GUIDE_SECTION.icon), h('span', { class: 'nav__label' }, t('section.guide.title'))),
+    h('ul', null, GUIDES.map((g) => h('li', null,
+      h('a', { class: 'nav__sublink', href: guidePath(g), dataset: { route: `${GUIDE_SECTION.id}/${g.id}` } }, L(g.navTitle ?? g.title)))))));
   items.push(h('li', null,
     h('a', { class: 'nav__link', href: `#/${EXTERNAL_SECTION.id}`, dataset: { route: EXTERNAL_SECTION.id }, title: t('section.esterni.title') },
       icon(EXTERNAL_SECTION.icon), h('span', { class: 'nav__label' }, t('section.esterni.title'))),
@@ -254,17 +264,21 @@ function searchTools(query) {
     const hay = normalize([tAll(`ext.${ext.id}.title`), tAll('section.esterni.title'), tAll(`ext.${ext.id}.keywords`)].join(' '));
     return words.every((w) => hay.includes(w));
   }).map((ext) => ({ id: ext.id, section: EXTERNAL_SECTION.id, external: true }));
+  const guides = GUIDES.filter((g) => {
+    const hay = normalize([...g.title, ...g.keywords, ...g.summary, tAll('section.guide.title')].join(' '));
+    return words.every((w) => hay.includes(w));
+  }).map((g) => ({ id: g.id, section: GUIDE_SECTION.id, guide: g }));
   return [...TOOLS.filter((tool) => {
     const hay = normalize([
       tAll(`tool.${tool.id}.title`), tAll(`section.${tool.section}.title`),
       tAll(`tool.${tool.id}.keywords`), tAll(`tool.${tool.id}.desc`),
     ].join(' '));
     return words.every((w) => hay.includes(w));
-  }), ...external];
+  }), ...guides, ...external];
 }
 
-const hitTitle = (hit) => (hit.external ? t(`ext.${hit.id}.short`) : toolTitle(hit));
-const hitSection = (hit) => (hit.external ? t('section.esterni.title') : sectionTitle(sectionById[hit.section]));
+const hitTitle = (hit) => (hit.guide ? L(hit.guide.navTitle ?? hit.guide.title) : hit.external ? t(`ext.${hit.id}.short`) : toolTitle(hit));
+const hitSection = (hit) => (hit.guide ? t('section.guide.title') : hit.external ? t('section.esterni.title') : sectionTitle(sectionById[hit.section]));
 
 function renderSearch() {
   const query = searchInput.value.trim();
@@ -300,7 +314,7 @@ function openHit(tool) {
   closeSearch();
   root.classList.remove('search-open');
   searchInput.blur();
-  location.hash = tool.external ? `#/${EXTERNAL_SECTION.id}` : toolPath(tool);
+  location.hash = tool.guide ? guidePath(tool.guide) : tool.external ? `#/${EXTERNAL_SECTION.id}` : toolPath(tool);
 }
 
 searchInput.addEventListener('input', renderSearch);
@@ -451,6 +465,31 @@ function renderExternal() {
   ];
 }
 
+function guideHead(title, description) {
+  return h('div', { class: 'page-head' }, h('h1', null, title), description ? h('p', null, description) : null,
+    h('p', { class: 'disclaimer', role: 'note' }, icon('info'), h('span', null, t('guide.disclaimer'))));
+}
+
+function renderGuideIndex() {
+  setCrumbs([{ title: t('section.guide.title') }]);
+  document.title = `${t('section.guide.title')} · rebluc`;
+  const cards = GUIDES.map((g) => {
+    const card = dashlet({ title: L(g.title), expandable: false, className: 'dashlet--link',
+      actions: [{ icon: 'arrowRight', label: t('app.open', { name: L(g.title) }), onclick: () => { location.hash = guidePath(g); } }] });
+    card.body.append(h('p', { class: 'muted', style: 'margin:0 0 8px' }, L(g.summary)), h('p', { class: 'guide-meta', style: 'margin:0' }, guideMeta(g)));
+    card.el.append(h('div', { class: 'dashlet__foot' }, h('a', { href: guidePath(g) }, t('guide.read'))));
+    card.el.addEventListener('click', (e) => { if (!e.target.closest('a, button')) location.hash = guidePath(g); });
+    return card.el;
+  });
+  return [guideHead(t('section.guide.title'), t('section.guide.desc')), h('div', { class: 'dash-grid' }, cards)];
+}
+
+function renderGuidePage(g) {
+  setCrumbs([{ title: t('section.guide.title'), href: `#/${GUIDE_SECTION.id}` }, { title: L(g.navTitle ?? g.title) }]);
+  document.title = `${L(g.navTitle ?? g.title)} · rebluc`;
+  return [guideHead(L(g.title), L(g.summary)), renderGuide(g)];
+}
+
 function renderNotFound() {
   setCrumbs([{ title: t('app.dashboard'), href: '#/' }, { title: t('app.notFound') }]);
   document.title = `${t('app.notFound')} · rebluc`;
@@ -481,6 +520,8 @@ async function route({ focus = true } = {}) {
   let nodes;
   try {
     if (!sectionId) { nodes = await renderDashboard(); updateNav(null, null); }
+    else if (sectionId === GUIDE_SECTION.id && !toolId) { nodes = renderGuideIndex(); updateNav(GUIDE_SECTION.id, null); }
+    else if (sectionId === GUIDE_SECTION.id && GUIDES.some((g) => g.id === toolId) && !rest.length) { nodes = renderGuidePage(GUIDES.find((g) => g.id === toolId)); updateNav(GUIDE_SECTION.id, toolId); }
     else if (sectionId === EXTERNAL_SECTION.id && !toolId) { nodes = renderExternal(); updateNav(EXTERNAL_SECTION.id, null); }
     else if (section && !toolId) { nodes = await renderSection(section); updateNav(section.id, null); }
     else if (tool && !rest.length) { nodes = await renderTool(section, tool, params); updateNav(section.id, tool.id); }
