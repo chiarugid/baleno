@@ -1,6 +1,6 @@
 # rebluc
 
-Strumenti di rete e VoIP che girano interamente nel browser, pubblicati su [www.rebluc.it](https://www.rebluc.it) tramite GitHub Pages.
+Strumenti di rete e VoIP che girano interamente nel browser, pubblicati su [www.rebluc.com](https://www.rebluc.com) tramite GitHub Pages.
 
 - **Calcolatore subnet** IPv4/IPv6: rete, broadcast, range host, wildcard, suddivisione in sottoreti (fino a 2^32 calcolate al volo; ordinamento e filtro sull'intero elenco fino a 4096 righe, sulla pagina corrente oltre; esportazione CSV fino a 65.536 righe)
 - **Calcolatore banda VoIP**: codec, packetization e overhead (SRTP, IPv4/IPv6, Ethernet, 802.1Q, preambolo, GRE, IPsec, NAT-T), per direzione o bidirezionale, banda media con VAD
