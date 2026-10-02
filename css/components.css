@@ -658,3 +658,4 @@ fieldset.field--plain legend { padding: 0; margin-bottom: 4px; }
   .kpis.kpis--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .kpis--3 > :last-child { grid-column: auto; }
 }
+.fspl-steps { margin: -6px 0 4px; color: var(--text-muted); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }

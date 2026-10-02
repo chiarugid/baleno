@@ -209,7 +209,7 @@ export function render(container, params, ctx) {
   const chartDl = dashlet({ title: t('rf.chart.title'), subtitle: t('rf.chart.subtitle'), className: 'span-all' });
   chartDl.body.append(chart.el);
 
-  container.append(h('div', { class: 'tool-grid tool-grid--half' }, convDl.el, eirpDl.el, budgetDl.el, chartDl.el));
+  container.append(h('div', { class: 'tool-grid tool-grid--half' }, convDl.el, eirpDl.el, chartDl.el, budgetDl.el));
 
   // --- Logica
   function showConversion(mwValue, source) {

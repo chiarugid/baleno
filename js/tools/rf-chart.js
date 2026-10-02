@@ -110,11 +110,17 @@ export function fsplChart({ formatPower, dbmToMw, onChange }) {
     const kind = margin == null ? null : margin >= 5 ? 'ok' : margin >= 0 ? 'warn' : 'err';
     const kpi = (label, value, unit, cls) => h('div', { class: cls ? `kpi kpi--${cls}` : 'kpi' },
       h('div', { class: 'kpi__label' }, label), h('div', { class: 'kpi__value' }, value, unit ? h('small', null, unit) : null));
-    return h('div', { class: margin != null ? 'kpis' : 'kpis kpis--3' },
+    const kpis = h('div', { class: margin != null ? 'kpis' : 'kpis kpis--3' },
       kpi('FSPL', fmtDec(r.fspl, 2), 'dB'),
       kpi(t('rf.rxPower'), fmtDec(r.rxDbm, 2), 'dBm', 'hl'),
       kpi(t('rf.chart.rxMw'), formatPower(dbmToMw(r.rxDbm)), null),
       margin != null ? kpi(t('rf.marginRssi'), fmtDec(margin, 2), 'dB', kind) : null);
+    const steps = h('p', { class: 'fspl-steps' },
+      t('rf.chart.steps', {
+        eirp: fmtDec(link.eirpDbm, 2), fspl: fmtDec(r.fspl, 2), d: fmtM(distance), f: fmtDec(link.freqMHz, 1),
+        grx: fmtDec(link.rxGainDbi, 2), lrx: fmtDec(link.rxLossDb, 2), rx: fmtDec(r.rxDbm, 2),
+      }));
+    return [kpis, steps];
   }
 
   function tableView() {
@@ -132,7 +138,7 @@ export function fsplChart({ formatPower, dbmToMw, onChange }) {
 
   function draw() {
     if (!link) return;
-    readout.replaceChildren(readoutView());
+    readout.replaceChildren(...readoutView());
     const width = Math.max(280, plot.clientWidth || 640);
     const height = width < 500 ? 220 : 280;
     const m = { l: 52, r: 16, t: 26, b: 34 };
