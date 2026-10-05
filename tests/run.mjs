@@ -1883,6 +1883,13 @@ test('guida Android: opzioni, comandi adb e rimandi agli strumenti', () => {
   const it = guideTexts(g).map(([x]) => x).join(' ');
   for (const s of ['Numero build', 'Attiva il logging dettagliato del Wi-Fi', 'Acquisisci segnalazione di bug', 'Trasferimento aggressivo dal Wi-Fi alla rete cellulare', 'Wi-Fi non-persistent MAC randomization']) assert.ok(it.includes(s), s);
   assert.equal(g.sources.length, 4);
+  // correzioni dopo revisione: niente soglie o equivalenze troppo categoriche
+  assert.ok(!it.includes('diventa fragile'), 'nessuna soglia RSSI universale');
+  assert.ok(it.includes('non soglie universali'));
+  assert.ok(it.includes('da sola non dimostra che l’indirizzo sia casuale'), 'U/L = amministrato localmente, non prova di casualità');
+  assert.ok(it.includes('Non significa un MAC nuovo a ogni connessione'));
+  assert.ok(it.includes('eventi di roaming') && !it.includes('il roaming (802.11k/v/r)'));
+  assert.ok(it.includes('se presente sul dispositivo'));
 });
 
 test('guida wlanreport: comandi e percorsi', () => {

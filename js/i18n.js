@@ -814,7 +814,7 @@ add('mac.', {
   ulLocal: ['1 · amministrato localmente', '1 · locally administered'],
   ulGlobal: ['0 · univoco globale (OUI IEEE)', '0 · globally unique (IEEE OUI)'],
   knownUse: ['Uso noto', 'Known use'],
-  noteRandom: ['Unicast amministrato localmente: tipico dei MAC casuali per la privacy su smartphone e PC, o di macchine virtuali.', 'Locally administered unicast: typical of randomised privacy MACs on phones and PCs, or of virtual machines.'],
+  noteRandom: ['Unicast amministrato localmente: tipico dei MAC casuali per la privacy su smartphone e PC o di macchine virtuali, ma può anche essere stato configurato a mano.', 'Locally administered unicast: typical of randomised privacy MACs on phones and PCs or of virtual machines, but it may also have been set by hand.'],
   noteOuiOnly: ['Hai indicato solo l’OUI (6 cifre): mostro il produttore senza i formati completi.', 'You entered only the OUI (6 digits): showing the vendor without the full formats.'],
   upper: ['MAIUSCOLO', 'UPPERCASE'],
   lower: ['minuscolo', 'lowercase'],
