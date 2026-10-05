@@ -5,7 +5,7 @@ import { h, fmtDec, kvList, badge, uid } from '../ui/dom.js';
 import { dashlet } from '../ui/dashlet.js';
 import { t, locale } from '../i18n.js';
 import { BANDS, REGULATIONS } from '../../data/rf-limits.js';
-import { fsplChart } from './rf-chart.js';
+import { fsplChart, pathLoss, distanceAt, isFree, envLabel } from './rf-chart.js';
 
 // ---------------------------------------------------------------- Calcoli
 
@@ -26,16 +26,21 @@ export function fspl(distanceKm, freqMHz) {
 
 // targetRssiDbm: RSSI di progetto, cioè il livello minimo da garantire al client
 // (es. −67 dBm per la voce su Wi-Fi). Non è la sensibilità del ricevitore.
-export function linkBudget({ eirpDbm, distanceKm, freqMHz, rxGainDbi = 0, rxLossDb = 0, targetRssiDbm = null }) {
-  const loss = fspl(distanceKm, freqMHz);
-  if (loss == null) return null;
-  const rxDbm = eirpDbm - loss + rxGainDbi - rxLossDb;
-  const result = { fspl: loss, rxDbm, margin: null, maxDistanceKm: null };
+// model: ambiente { n, walls, wallLoss } del grafico; assente o n = 2 senza pareti = spazio libero.
+export function linkBudget({ eirpDbm, distanceKm, freqMHz, rxGainDbi = 0, rxLossDb = 0, targetRssiDbm = null, model = null }) {
+  if (!(distanceKm > 0) || !(freqMHz > 0)) return null;
+  const pl = pathLoss(distanceKm * 1000, freqMHz, model ?? undefined);
+  const rxDbm = eirpDbm - pl.total + rxGainDbi - rxLossDb;
+  const result = {
+    fspl: pl.fspl, loss: pl.total, ref: pl.ref, distanceLoss: pl.distanceLoss, wallsLoss: pl.wallsLoss,
+    free: isFree(model), rxDbm, margin: null, maxDistanceKm: null, unreachable: false,
+  };
   if (targetRssiDbm != null) {
     result.margin = rxDbm - targetRssiDbm;
-    // Distanza alla quale la potenza ricevuta scende all'RSSI di progetto (spazio libero).
-    const allowed = eirpDbm + rxGainDbi - rxLossDb - targetRssiDbm;
-    result.maxDistanceKm = 10 ** ((allowed - 32.44 - 20 * Math.log10(freqMHz)) / 20);
+    // Distanza alla quale la potenza ricevuta scende all'RSSI di progetto, col modello scelto.
+    const meters = distanceAt({ eirpDbm, freqMHz, rxGainDbi, rxLossDb }, model, targetRssiDbm);
+    result.maxDistanceKm = meters == null ? null : meters / 1000;
+    result.unreachable = meters == null;
   }
   return result;
 }
@@ -222,7 +227,7 @@ export function render(container, params, ctx) {
     budgetOut));
 
   // --- Grafico potenza / distanza
-  const chart = fsplChart({ formatPower, dbmToMw, onChange: () => saveParams() });
+  const chart = fsplChart({ formatPower, dbmToMw, onChange: () => saveParams(), onModelChange: () => update() });
   const chartDl = dashlet({ title: t('rf.chart.title'), subtitle: t('rf.chart.subtitle'), className: 'span-all' });
   chartDl.body.append(chart.el);
 
@@ -292,29 +297,43 @@ export function render(container, params, ctx) {
       const distanceKm = unitSelect.value === 'km' ? b.d.value : b.d.value / 1000;
       if (!(distanceKm > 0)) setError(dist, t('rf.err.distance'));
       if (!(b.f.value > 0)) setError(freq, t('rf.err.frequency'));
-      const lb = linkBudget({ eirpDbm: e, distanceKm, freqMHz: b.f.value, rxGainDbi: b.grx.value, rxLossDb: b.lrx.value, targetRssiDbm: b.rssi.value });
+      const model = chart.model();
+      const lb = linkBudget({ eirpDbm: e, distanceKm, freqMHz: b.f.value, rxGainDbi: b.grx.value, rxLossDb: b.lrx.value, targetRssiDbm: b.rssi.value, model });
       if (lb) {
+        const walls = model.walls * model.wallLoss > 0;
+        const envText = walls ? `${envLabel(model.env, model.n)} · ${t('rf.chart.legendWalls', { w: model.walls, wl: fmtDec(model.wallLoss, 1) })}` : envLabel(model.env, model.n);
+        // scomposizione dell'attenuazione col modello: FSPL a 1 m + 10·n·log10(d) (+ pareti)
+        const lossDetail = lb.free ? null : distanceKm * 1000 <= 1
+          ? t('rf.budgetLossNear', { dist: fmtDec(lb.distanceLoss, 2) })
+          : t('rf.budgetLossDetail', { ref: fmtDec(lb.ref, 2), n: fmtDec(model.n, 2), part: fmtDec(lb.distanceLoss - lb.ref, 2) });
+        const wallsDetail = walls ? t('rf.budgetLossWalls', { w: model.walls, wl: fmtDec(model.wallLoss, 1), tot: fmtDec(lb.wallsLoss, 1) }) : '';
         // Sopra l'RSSI di progetto con almeno 5 dB di riserva: ok; tra 0 e 5: al limite; sotto: insufficiente.
         const marginKind = lb.margin == null ? null : lb.margin >= 5 ? 'ok' : lb.margin >= 0 ? 'warn' : 'err';
         budgetNodes = [
           h('div', { class: 'kpis' },
-            kpi('FSPL', fmtDec(lb.fspl, 2), 'dB'),
+            kpi(lb.free ? 'FSPL' : t('rf.chart.loss'), fmtDec(lb.loss, 2), 'dB'),
             kpi(t('rf.rxPower'), fmtDec(lb.rxDbm, 2), 'dBm', true),
             kpi(t('rf.marginRssi'), lb.margin == null ? '—' : fmtDec(lb.margin, 2), lb.margin == null ? '' : 'dB', marginKind ?? false),
             kpi(t('rf.maxDistance'), lb.maxDistanceKm == null ? '—' : formatDistance(lb.maxDistanceKm))),
+          lb.free ? null : h('p', { class: 'budget-env' }, t('rf.budgetEnv', { env: envText })),
           kvList([
             { label: 'EIRP', value: `${fmtDec(e, 2)} dBm` },
-            { label: '− FSPL', value: `${fmtDec(lb.fspl, 2)} dB` },
+            lb.free
+              ? { label: '− FSPL', value: `${fmtDec(lb.fspl, 2)} dB` }
+              : { label: t('rf.minusLoss'), value: [`${fmtDec(lb.loss, 2)} dB`, h('span', { class: 'sub' }, `${lossDetail}${wallsDetail}`)] },
+            lb.free ? null : { label: t('rf.freeSpaceRef'), value: `${fmtDec(lb.rxDbm + lb.loss - lb.fspl, 2)} dBm (FSPL ${fmtDec(lb.fspl, 2)} dB)` },
             { label: t('rf.plusRxGain'), value: `${fmtDec(b.grx.value, 2)} dBi` },
             { label: t('rf.minusRxLoss'), value: `${fmtDec(b.lrx.value, 2)} dB` },
             { label: t('rf.equalsRx'), value: `${fmtDec(lb.rxDbm, 2)} dBm (${formatPower(dbmToMw(lb.rxDbm))})`, hl: true },
             lb.margin != null ? { label: t('rf.marginLabel'), value: [`${fmtDec(lb.margin, 2)} dB `, badge(marginKind === 'ok' ? t('rf.marginOk') : marginKind === 'warn' ? t('rf.marginWarn') : t('rf.marginErr'), marginKind)] } : null,
-            lb.maxDistanceKm != null ? { label: t('rf.distanceToRssi'), value: [formatDistance(lb.maxDistanceKm), h('span', { class: 'sub' }, t('rf.theoretical'))] } : null,
+            lb.maxDistanceKm != null ? { label: t('rf.distanceToRssi'), value: [formatDistance(lb.maxDistanceKm), h('span', { class: 'sub' }, lb.free ? t('rf.theoretical') : t('rf.estimateEnv'))] } : null,
+            lb.unreachable ? { label: t('rf.distanceToRssi'), value: h('span', { class: 'sans' }, t('rf.chart.rssiNone', { rssi: fmtDec(b.rssi.value, 0) })) } : null,
           ], 'kv--compact'),
         ];
       }
     }
-    budgetOut.replaceChildren(...(budgetNodes ?? [h('p', { class: 'empty' }, t('rf.incomplete'))]));
+    budgetOut.replaceChildren(...(budgetNodes ?? [h('p', { class: 'empty' }, t('rf.incomplete'))]).filter(Boolean));
+    budgetDl.setSubtitle(isFree(chart.model()) ? t('rf.budgetSub') : t('rf.budgetSubModel'));
     // il grafico usa EIRP, frequenza e lato ricevente del budget, non la sua distanza
     const chartOk = b.f.ok && b.f.value > 0 && b.grx.ok && b.lrx.ok && b.rssi.ok;
     chart.update(chartOk ? { eirpDbm: e, freqMHz: b.f.value, rxGainDbi: b.grx.value, rxLossDb: b.lrx.value } : null, chartOk ? b.rssi.value : null);

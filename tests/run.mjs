@@ -1206,6 +1206,35 @@ test('frequenza del canale centrale di ogni banda', () => {
   }
 });
 
+test('budget di collegamento col modello d’ambiente', () => {
+  const base = { eirpDbm: 20, distanceKm: 0.1, freqMHz: 2437, rxGainDbi: 2, rxLossDb: 0, targetRssiDbm: -67 };
+  // senza modello o con lo spazio libero: identico a prima
+  const free = linkBudget(base);
+  const free2 = linkBudget({ ...base, model: { env: 'free', n: 2, walls: 0, wallLoss: 4 } });
+  near(free.rxDbm, -58.18, 0.01);
+  near(free.maxDistanceKm, 0.276, 0.001);
+  assert.ok(free.free && free2.free);
+  near(free2.rxDbm, free.rxDbm, 1e-9);
+  near(free2.maxDistanceKm, free.maxDistanceKm, 1e-9);
+  near(free.loss, free.fspl, 1e-9);
+  // uffici n = 3: −78,18 dBm a 100 m, RSSI −67 a 42 m
+  const office = linkBudget({ ...base, model: { env: 'office', n: 3, walls: 0, wallLoss: 4 } });
+  assert.equal(office.free, false);
+  near(office.rxDbm, -78.18, 0.01);
+  near(office.margin, -11.18, 0.01);
+  near(office.maxDistanceKm, 0.042, 0.001);
+  near(office.fspl, free.fspl, 1e-9, 'FSPL di riferimento invariata');
+  // uffici + 2 pareti × 5 dB: −88,18 dBm, RSSI −67 a 20 m
+  const walls = linkBudget({ ...base, model: { env: 'office', n: 3, walls: 2, wallLoss: 5 } });
+  near(walls.rxDbm, -88.18, 0.01);
+  near(walls.wallsLoss, 10, 1e-12);
+  near(walls.maxDistanceKm, 0.020, 0.001);
+  // pareti che bloccano tutto: distanza non raggiungibile
+  const blocked = linkBudget({ ...base, model: { env: 'solid', n: 3.5, walls: 10, wallLoss: 40 } });
+  assert.equal(blocked.maxDistanceKm, null);
+  assert.equal(blocked.unreachable, true);
+});
+
 test('canali da 20 MHz nelle etichette delle bande', () => {
   assert.equal(bandLabel('2g4'), '2,4 GHz (2400–2483,5 MHz) · canali 1–13 (13)');
   assert.equal(bandLabel('unii1'), '5 GHz U-NII-1 indoor (5150–5250 MHz) · canali 36, 40, 44, 48');

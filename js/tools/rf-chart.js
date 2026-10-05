@@ -86,13 +86,14 @@ const parseField = (text) => {
 
 const fmtM = (m) => (m >= 1000 ? `${fmtDec(m / 1000, 2)} km` : `${fmtDec(m, m >= 10 ? 0 : 1)} m`);
 
-const isFree = (model) => model.n === 2 && model.walls * model.wallLoss === 0;
+export const isFree = (model) => !model || ((model.n ?? 2) === 2 && (model.walls ?? 0) * (model.wallLoss ?? 0) === 0);
 
 export function envLabel(id, n) {
   return id === 'custom' ? t('rf.env.custom') : t(`rf.env.${id}`, { n: fmtDec(n, 1) });
 }
 
-export function fsplChart({ formatPower, dbmToMw, onChange }) {
+// onChange: cambia solo il grafico (distanza, scala); onModelChange: cambia l'ambiente, che usa anche il budget.
+export function fsplChart({ formatPower, dbmToMw, onChange, onModelChange }) {
   const ids = { range: uid('rng'), dist: uid('gd'), slider: uid('gds'), env: uid('env'), n: uid('envn'), walls: uid('pw'), wl: uid('pl') };
   const field = (id, label, unit, input, error) => h('div', { class: 'field' },
     h('label', { for: id }, label, unit ? h('span', { class: 'field__unit' }, ` (${unit})`) : null), input, error);
@@ -196,8 +197,8 @@ export function fsplChart({ formatPower, dbmToMw, onChange }) {
     const wallLoss = readRange(wlInput, wlError, LIMITS.wallLoss, t('rf.env.errWallLoss'));
     if (n == null || walls == null || wallLoss == null) return;
     Object.assign(model, { n, walls, wallLoss });
-    draw();
-    onChange();
+    if (onModelChange) onModelChange();
+    else { draw(); onChange(); }
   }
   envSelect.addEventListener('change', () => {
     model.env = envSelect.value;
@@ -412,6 +413,7 @@ export function fsplChart({ formatPower, dbmToMw, onChange }) {
       }
       draw();
     },
+    model: () => ({ ...model }),
     params: () => ({
       gr: range === DEFAULT_RANGE ? '' : String(range),
       gd: String(Math.round(distance * 10) / 10),
