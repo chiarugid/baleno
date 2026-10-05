@@ -1893,6 +1893,10 @@ test('guida Android: opzioni, comandi adb e rimandi agli strumenti', () => {
   for (const s of ['il supplicant segnala la connessione alla rete', 'ASSOCIATION_REJECTION_EVENT', 'AUTHENTICATION_FAILURE_EVENT', 'non generata localmente', 'non dice nulla su DHCP']) assert.ok(all.includes(s), s);
   assert.ok(!all.includes('fase 3, chiavi') && !all.includes('arrivata dalla rete o dall’AP') && !all.includes('indica un problema di autenticazione o chiavi'));
   assert.ok(codes.some((c) => c.includes('ASSOCIATION_REJECTION_EVENT|AUTHENTICATION_FAILURE_EVENT')));
+  // IP provisioning (non solo DHCP) e MAC dell'esempio senza dedurre la casualità dal bit U/L
+  assert.ok(codes.some((c) => c.includes('CMD_IP_CONFIGURATION_LOST|CMD_IP_REACHABILITY_LOST')));
+  for (const s of ['IP provisioning completato', 'fase di IP provisioning', 'il bit U/L da solo non lo dimostra']) assert.ok(all.includes(s), s);
+  assert.ok(!all.includes('qui casuale (amministrato localmente)') && !all.includes('nell’assegnazione dell’IP (DHCP)'));
   const tools = blocks.filter((b) => b.tool).map((b) => b.tool);
   assert.deepEqual(tools, ['#/wireless/potenza', '#/l2/mac']);
   const it = guideTexts(g).map(([x]) => x).join(' ');
