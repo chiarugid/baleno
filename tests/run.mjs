@@ -1882,5 +1882,29 @@ test('guida wlanreport: comandi e percorsi', () => {
   assert.ok(consoleBlock.console.includes('Report scritto in: C:\\ProgramData\\Microsoft\\Windows\\WlanReport\\wlan-report-latest.html'));
 });
 
+console.log('Versione dei file (cache)');
+
+const { stampHtml, collectAssets, fingerprint } = await import('../scripts/stamp.mjs');
+
+test('index.html ha le impronte aggiornate (lancia node scripts/stamp.mjs prima del commit)', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const assets = collectAssets();
+  assert.equal(stampHtml(html, assets), html, 'index.html non aggiornato: node scripts/stamp.mjs');
+  // ogni modulo e foglio di stile è versionato
+  const map = JSON.parse(/<script type="importmap">([\s\S]*?)<\/script>/.exec(html)[1]).imports;
+  for (const a of assets) {
+    if (a.path.endsWith('.js')) assert.equal(map[`./${a.path}`], `./${a.path}?v=${a.hash}`, a.path);
+    else assert.ok(html.includes(`href="${a.path}?v=${a.hash}"`), a.path);
+  }
+  assert.ok(html.includes(`src="js/app.js?v=${assets.find((a) => a.path === 'js/app.js').hash}"`));
+  assert.ok(html.indexOf('type="importmap"') < html.indexOf('<script type="module"'), 'import map prima dello script');
+});
+
+test('impronta indipendente dalle fine riga', () => {
+  assert.equal(fingerprint('a\r\nb\r\n'), fingerprint('a\nb\n'));
+  assert.notEqual(fingerprint('a\nb\n'), fingerprint('a\nc\n'));
+  assert.match(fingerprint('x'), /^[0-9a-f]{10}$/);
+});
+
 console.log(`\n${passed} superati, ${failed} falliti`);
 process.exit(failed ? 1 : 0);

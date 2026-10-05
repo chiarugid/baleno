@@ -47,6 +47,16 @@ python -m http.server 8000
 
 poi apri <http://localhost:8000>.
 
+## Versione dei file (cache)
+
+GitHub Pages lascia i file in cache nel browser per 10 minuti. Per far arrivare subito gli aggiornamenti, ogni CSS e modulo JS è richiesto con `?v=<impronta del contenuto>`: i fogli di stile e `js/app.js` direttamente in `index.html`, gli altri moduli tramite una import map. **Prima di ogni commit** che tocca `js/`, `data/` o `css/`:
+
+```sh
+node scripts/stamp.mjs
+```
+
+Un test di `tests/run.mjs` fallisce se `index.html` non è aggiornato.
+
 ## Test
 
 I calcoli si verificano con Node 20 o successivo (serve Web Crypto globale), senza dipendenze:
@@ -80,5 +90,5 @@ js/tools/      un modulo per strumento: funzioni di calcolo + interfaccia
 data/          tabelle statiche
 fonts/         Inter (SIL OFL 1.1)
 tests/         test dei calcoli e fixture dei certificati
-scripts/       generazione dei dati (OUI)
+scripts/       generazione dei dati (OUI) e versione dei file (stamp.mjs)
 ```
