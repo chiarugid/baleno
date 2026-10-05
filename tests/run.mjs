@@ -1888,6 +1888,11 @@ test('guida Android: opzioni, comandi adb e rimandi agli strumenti', () => {
   for (const m of consoles.match(/\b[0-9a-f]{2}(?::[0-9a-f]{2}){5}\b/gi) ?? []) assert.ok(['aa:bb:cc:dd:ee:01', 'da:a1:19:12:34:56'].includes(m), `MAC non d'esempio: ${m}`);
   assert.ok(blocks.filter((b) => b.console).every((b) => b.lang === 'en'));
   assert.ok(!guideTexts(g).some(([x]) => x.includes('4WAY_HANDSHAKE fermi')), 'nome dello stato come in Android: FOUR_WAY_HANDSHAKE');
+  // revisione su WifiMetrics AOSP: evento di connessione, rifiuti/fallimenti, local_gen, COMPLETED
+  const all = guideTexts(g).map(([x]) => x).join(' ');
+  for (const s of ['il supplicant segnala la connessione alla rete', 'ASSOCIATION_REJECTION_EVENT', 'AUTHENTICATION_FAILURE_EVENT', 'non generata localmente', 'non dice nulla su DHCP']) assert.ok(all.includes(s), s);
+  assert.ok(!all.includes('fase 3, chiavi') && !all.includes('arrivata dalla rete o dall’AP') && !all.includes('indica un problema di autenticazione o chiavi'));
+  assert.ok(codes.some((c) => c.includes('ASSOCIATION_REJECTION_EVENT|AUTHENTICATION_FAILURE_EVENT')));
   const tools = blocks.filter((b) => b.tool).map((b) => b.tool);
   assert.deepEqual(tools, ['#/wireless/potenza', '#/l2/mac']);
   const it = guideTexts(g).map(([x]) => x).join(' ');
