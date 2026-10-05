@@ -170,6 +170,54 @@ export default {
         { code: 'adb devices', note: ['Elenca i dispositivi collegati: alla prima connessione conferma l’autorizzazione sul telefono.', 'Lists the connected devices: on the first connection confirm the authorisation on the phone.'] },
         { code: 'adb bugreport', note: ['Crea il file bugreport-<build>-<data>.zip nella cartella corrente. Contiene dumpsys (stato dei servizi di sistema), dumpstate e logcat (i log di sistema).', 'Creates the bugreport-<build>-<date>.zip file in the current folder. It contains dumpsys (system service state), dumpstate and logcat (system logs).'] },
         { code: 'adb shell dumpsys wifi', note: ['Mostra lo stato diagnostico interno del servizio Wi-Fi: può includere configurazione e connessione correnti, statistiche, scansioni ed eventi recenti. Contenuto e formato non sono un’interfaccia stabile e cambiano tra versioni di Android e produttori.', 'Shows the internal diagnostic state of the Wi-Fi service: it may include the current configuration and connection, statistics, scans and recent events. Content and format are not a stable interface and change between Android versions and manufacturers.'] },
+        { p: [
+          'Esempio reale di cosa cercare. Per la connessione corrente filtra la riga mWifiInfo:',
+          'A real example of what to look for. For the current connection filter the mWifiInfo line:',
+        ] },
+        { code: 'adb shell "dumpsys wifi | grep mWifiInfo"', note: ['Il filtro gira sul telefono, quindi il comando funziona uguale da Windows, macOS e Linux.', 'The filter runs on the phone, so the command works the same from Windows, macOS and Linux.'] },
+        { console: `mWifiInfo SSID: "corp-wifi", BSSID: aa:bb:cc:dd:ee:01, MAC: da:a1:19:12:34:56, IP: /192.0.2.50, Security type: 2, Supplicant state: COMPLETED, Wi-Fi standard: 11ac, RSSI: -42, Link speed: 866Mbps, Tx Link speed: 866Mbps, Max Supported Tx Link speed: 866Mbps, Rx Link speed: 780Mbps, Max Supported Rx Link speed: 866Mbps, Frequency: 5260MHz, Net ID: 14, Metered hint: false, score: 60, isUsable: true, …`, lang: 'en', caption: ['Galaxy S23 (SM-S911B), Android 16, 5 ottobre 2026. SSID, BSSID, MAC e IP sostituiti con valori d’esempio, riga accorciata (…).', 'Galaxy S23 (SM-S911B), Android 16, 5 October 2026. SSID, BSSID, MAC and IP replaced with sample values, line shortened (…).'] },
+        { table: {
+          head: [['Campo', 'Field'], ['Come leggerlo', 'How to read it']],
+          rows: [
+            ['BSSID', ['l’access point (radio) a cui il telefono è associato: è il valore da cercare sul controller', 'the access point (radio) the phone is associated with: the value to look up on the controller']],
+            ['RSSI', ['−42 dBm: segnale molto forte; da leggere insieme a SNR e ritrasmissioni del controller', '−42 dBm: very strong signal; read it together with the controller SNR and retries']],
+            ['Frequency', ['5260 MHz = canale 52 (U-NII-2A, con DFS)', '5260 MHz = channel 52 (U-NII-2A, with DFS)']],
+            ['Wi-Fi standard', ['11ac = Wi-Fi 5; con 11ax o 11be (Wi-Fi 6, 7) cambiano rate e funzioni disponibili', '11ac = Wi-Fi 5; with 11ax or 11be (Wi-Fi 6, 7) available rates and features change']],
+            ['Link speed · Tx · Rx', ['rate di collegamento attuali (866 e 780 Mbps) e massimi supportati: non sono il throughput delle applicazioni', 'current link rates (866 and 780 Mbps) and maximum supported: not the applications’ throughput']],
+            ['Security type', ['2 = PSK (WPA2-Personal) secondo le costanti AOSP: 0 aperta, 3 EAP (802.1X), 4 SAE (WPA3-Personal), 6 OWE', '2 = PSK (WPA2-Personal) per the AOSP constants: 0 open, 3 EAP (802.1X), 4 SAE (WPA3-Personal), 6 OWE']],
+            ['Supplicant state', ['COMPLETED = autenticazione e chiavi a posto; stati come ASSOCIATING o FOUR_WAY_HANDSHAKE fermi indicano dove si blocca', 'COMPLETED = authentication and keys in place; states such as ASSOCIATING or FOUR_WAY_HANDSHAKE that stay put show where it stalls']],
+            ['MAC', ['il MAC usato per questa rete: qui casuale (amministrato localmente), vedi il passo 5', 'the MAC used for this network: random here (locally administered), see step 5']],
+          ],
+        } },
+        { p: [
+          'Per la cronologia, su questo telefono la sezione StaEventList (dentro WifiMetrics) elenca gli eventi di ogni connessione. Per vedere gli ultimi:',
+          'For the history, on this phone the StaEventList section (inside WifiMetrics) lists the events of each connection. To see the latest:',
+        ] },
+        { code: 'adb shell "dumpsys wifi | grep -E \'CMD_ASSOCIATED_BSSID|NETWORK_CONNECTION_EVENT|CMD_IP_CONFIGURATION_SUCCESSFUL|NETWORK_AGENT_VALID_NETWORK|NETWORK_DISCONNECTION_EVENT\' | tail -n 20"', note: ['Mostra gli ultimi 20 eventi di associazione, chiavi, IP, validazione e disconnessione.', 'Shows the last 20 association, key, IP, validation and disconnection events.'] },
+        { console: `10-05 09:29:24.134 MAC_CHANGE screenOn=false cellularData=true …
+10-05 09:29:24.183 CMD_START_CONNECT screenOn=false cellularData=true …
+10-05 09:29:24.402 CMD_ASSOCIATED_BSSID lastRssi=-56 lastFreq=5260 lastLinkSpeed=468 … supplicantStateChangeEvents: { ASSOCIATING ASSOCIATED } …
+10-05 09:29:24.436 NETWORK_CONNECTION_EVENT … supplicantStateChangeEvents: { FOUR_WAY_HANDSHAKE GROUP_HANDSHAKE } …
+10-05 09:29:26.615 CMD_IP_CONFIGURATION_SUCCESSFUL lastRssi=-55 lastFreq=5260 lastLinkSpeed=468 … supplicantStateChangeEvents: { COMPLETED } …
+10-05 09:29:28.420 NETWORK_AGENT_VALID_NETWORK screenOn=false cellularData=true …
+
+10-04 20:33:12.352 NETWORK_DISCONNECTION_EVENT local_gen=true reason=3:DEAUTH_LEAVING …
+10-05 08:55:41.749 NETWORK_DISCONNECTION_EVENT local_gen=false reason=-1:UNSPECIFIED lastRssi=-63 lastFreq=5180 lastLinkSpeed=351 lastScore=60 …`, lang: 'en', caption: ['Stesso telefono: una connessione completa e due disconnessioni. Righe accorciate (…), tolti contatori di traffico e configurazione.', 'Same phone: one complete connection and two disconnections. Lines shortened (…), traffic counters and configuration removed.'] },
+        { table: {
+          head: [['Evento', 'Event'], ['Fase e significato', 'Stage and meaning']],
+          rows: [
+            ['MAC_CHANGE · CMD_START_CONNECT', ['il telefono imposta il MAC per questa rete e avvia la connessione', 'the phone sets the MAC for this network and starts connecting']],
+            ['CMD_ASSOCIATED_BSSID', ['fase 2, associazione: { ASSOCIATING ASSOCIATED }, con RSSI, frequenza e link speed del momento', 'stage 2, association: { ASSOCIATING ASSOCIATED }, with the current RSSI, frequency and link speed']],
+            ['NETWORK_CONNECTION_EVENT', ['fase 3, chiavi: { FOUR_WAY_HANDSHAKE GROUP_HANDSHAKE }', 'stage 3, keys: { FOUR_WAY_HANDSHAKE GROUP_HANDSHAKE }']],
+            ['CMD_IP_CONFIGURATION_SUCCESSFUL', ['fase 4, indirizzo IP ottenuto; { COMPLETED }', 'stage 4, IP address obtained; { COMPLETED }']],
+            ['NETWORK_AGENT_VALID_NETWORK', ['fase 6, Android ha validato l’accesso a Internet', 'stage 6, Android has validated Internet access']],
+            ['NETWORK_DISCONNECTION_EVENT', ['local_gen=true: disconnessione decisa dal telefono (reason=3, DEAUTH_LEAVING: il client lascia la rete); local_gen=false: arrivata dalla rete o dall’AP; reason è il codice 802.11 (−1 = non specificato); lastRssi e lastFreq mostrano le condizioni radio al momento', 'local_gen=true: disconnection decided by the phone (reason=3, DEAUTH_LEAVING: the client leaves the network); local_gen=false: it came from the network or AP; reason is the 802.11 code (−1 = unspecified); lastRssi and lastFreq show the radio conditions at that moment']],
+          ],
+        } },
+        { p: [
+          'Una sequenza che si ferma prima di NETWORK_CONNECTION_EVENT indica un problema di autenticazione o chiavi; senza CMD_IP_CONFIGURATION_SUCCESSFUL il problema è il DHCP; senza NETWORK_AGENT_VALID_NETWORK è la validazione (Internet, DNS, proxy, captive portal). Nomi e sezioni sono quelli di questo telefono: su altre versioni o produttori possono cambiare.',
+          'A sequence that stops before NETWORK_CONNECTION_EVENT points to an authentication or key problem; without CMD_IP_CONFIGURATION_SUCCESSFUL the problem is DHCP; without NETWORK_AGENT_VALID_NETWORK it is validation (Internet, DNS, proxy, captive portal). Names and sections are those of this phone: on other versions or manufacturers they may change.',
+        ] },
         { warn: [
           'Segnalazione di bug e dumpsys contengono molti dati personali e di rete: nomi delle reti, indirizzi e identificativi, app installate, account, log di sistema e delle altre app. Condividili solo con chi deve analizzarli, su un canale riservato, e non pubblicarli mai su forum o ticket pubblici.',
           'Bug reports and dumpsys contain a lot of personal and network data: network names, addresses and identifiers, installed apps, accounts, system and other apps’ logs. Share them only with whoever needs to analyse them, over a private channel, and never post them on forums or public tickets.',

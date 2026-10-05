@@ -731,3 +731,4 @@ fieldset.field--plain legend { padding: 0; margin-bottom: 4px; }
 .budget-env { margin: -6px 0 8px; color: var(--text-muted); font-size: var(--fs-sm); }
 .guide-tool { display: flex; align-items: flex-start; gap: 6px; padding: 8px 12px; border-radius: var(--radius); background: var(--accent-soft); font-size: var(--fs-sm); }
 .guide-tool .icon { margin-top: 2px; color: var(--accent-text); }
+.guide-console pre { white-space: pre-wrap; overflow-wrap: anywhere; }

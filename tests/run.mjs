@@ -1877,7 +1877,17 @@ test('guida Android: opzioni, comandi adb e rimandi agli strumenti', () => {
   assert.ok(g, 'guida presente');
   const blocks = g.sections.flatMap((s) => s.blocks);
   const codes = blocks.filter((b) => b.code).map((b) => b.code);
-  assert.deepEqual(codes, ['adb devices', 'adb bugreport', 'adb shell dumpsys wifi']);
+  assert.deepEqual(codes.slice(0, 3), ['adb devices', 'adb bugreport', 'adb shell dumpsys wifi']);
+  assert.ok(codes.includes('adb shell "dumpsys wifi | grep mWifiInfo"'));
+  assert.ok(codes.some((c) => c.includes('NETWORK_DISCONNECTION_EVENT') && c.includes('tail -n 20')));
+  // esempio reale anonimizzato: nessun dato del telefono originale
+  const consoles = blocks.filter((b) => b.console).map((b) => b.console).join('\n');
+  assert.ok(consoles.includes('RSSI: -42') && consoles.includes('Frequency: 5260MHz') && consoles.includes('FOUR_WAY_HANDSHAKE'));
+  // l'unico SSID ammesso negli esempi è quello inventato
+  assert.deepEqual([...consoles.matchAll(/SSID: "([^"]*)"/g)].map((m) => m[1]), ['corp-wifi'], 'solo SSID d’esempio');
+  for (const m of consoles.match(/\b[0-9a-f]{2}(?::[0-9a-f]{2}){5}\b/gi) ?? []) assert.ok(['aa:bb:cc:dd:ee:01', 'da:a1:19:12:34:56'].includes(m), `MAC non d'esempio: ${m}`);
+  assert.ok(blocks.filter((b) => b.console).every((b) => b.lang === 'en'));
+  assert.ok(!guideTexts(g).some(([x]) => x.includes('4WAY_HANDSHAKE fermi')), 'nome dello stato come in Android: FOUR_WAY_HANDSHAKE');
   const tools = blocks.filter((b) => b.tool).map((b) => b.tool);
   assert.deepEqual(tools, ['#/wireless/potenza', '#/l2/mac']);
   const it = guideTexts(g).map(([x]) => x).join(' ');

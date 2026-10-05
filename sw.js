@@ -5,20 +5,20 @@
 // L'elenco dei file e la versione sono generati da scripts/stamp.mjs.
 
 // stamp:begin (generato da scripts/stamp.mjs, non modificare)
-const VERSION = 'b83d67600f';
+const VERSION = 'c60060bcc5';
 const ASSETS = [
   "./",
   "./index.html",
   "./favicon.svg",
   "./fonts/inter-var.woff2",
-  "./css/components.css?v=ca7146b715",
+  "./css/components.css?v=e0cd2d34a3",
   "./css/layout.css?v=f93779a1c5",
   "./css/tokens.css?v=c00402aab1",
   "./data/cert-examples.js?v=1d844ec1ea",
   "./data/codecs.js?v=66c631ed19",
   "./data/dscp.js?v=34b67bfb81",
   "./data/emodel.js?v=97bf324dba",
-  "./data/guides/android-wifi.js?v=d00a484827",
+  "./data/guides/android-wifi.js?v=e9b8118c95",
   "./data/guides/wlanreport.js?v=b11f79e2b3",
   "./data/oui.js?v=dbbf3b616a",
   "./data/rf-limits.js?v=8ea60bbd60",
