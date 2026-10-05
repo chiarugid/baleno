@@ -1882,11 +1882,14 @@ test('guida Android: opzioni, comandi adb e rimandi agli strumenti', () => {
   assert.deepEqual(tools, ['#/wireless/potenza', '#/l2/mac']);
   const it = guideTexts(g).map(([x]) => x).join(' ');
   for (const s of ['Numero build', 'Attiva il logging dettagliato del Wi-Fi', 'Acquisisci segnalazione di bug', 'Trasferimento aggressivo dal Wi-Fi alla rete cellulare', 'Wi-Fi non-persistent MAC randomization']) assert.ok(it.includes(s), s);
-  assert.equal(g.sources.length, 9);
+  assert.equal(g.sources.length, 11);
   // seconda revisione: dati radio, sequenza della connessione, 802.1X/WPA3, adb wireless, dumpsys
   for (const s of ['BSSID', 'PHY rate', 'SNR', 'ritrasmissioni', 'Validazione di Android', 'TOFU', 'Debug wireless', 'non sono un’interfaccia stabile', 'resta associato al Wi-Fi', 'hardware (di fabbrica)', 'MAB sul sistema NAC', 'WifiManager.startScan', '−73 dBm a 2,4 GHz']) assert.ok(it.includes(s), s);
   assert.ok(!it.includes('stampato sul dispositivo') && !it.includes('far sembrare il Wi-Fi'));
   for (const s of ['non sono direttamente confrontabili', 'usa la ricerca nelle impostazioni', 'log di sistema e delle altre app', 'non pubblicarli mai']) assert.ok(it.includes(s), s);
+  // terza revisione: SNR dal controller, 4-way handshake, MLO, permessi Android 13, modalità non persistente
+  for (const s of ['Android in genere non mostra l’SNR', '4-way handshake', 'Multi-Link Operation', 'NEARBY_WIFI_DEVICES', 'ACCESS_FINE_LOCATION', 'reti suggerite da un’app', 'Protected Management Frames']) assert.ok(it.includes(s), s);
+  assert.ok(!it.includes('può deciderla il firmware') && !it.includes('per giudicare sufficiente la rete corrente'));
   // correzioni dopo revisione: niente soglie o equivalenze troppo categoriche
   assert.ok(!it.includes('diventa fragile'), 'nessuna soglia RSSI universale');
   assert.ok(it.includes('non soglie universali'));
