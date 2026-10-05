@@ -1897,6 +1897,9 @@ test('guida Android: opzioni, comandi adb e rimandi agli strumenti', () => {
   assert.ok(codes.some((c) => c.includes('CMD_IP_CONFIGURATION_LOST|CMD_IP_REACHABILITY_LOST')));
   for (const s of ['IP provisioning completato', 'fase di IP provisioning', 'il bit U/L da solo non lo dimostra']) assert.ok(all.includes(s), s);
   assert.ok(!all.includes('qui casuale (amministrato localmente)') && !all.includes('nell’assegnazione dell’IP (DHCP)'));
+  // revisione completa: fasi IP, validazione anche dell'utente, PSK, DFS senza U-NII, eventi separati, privacy, factory reset
+  for (const s of ['4 · IP provisioning', 'non risponde al ping', 'perché l’utente l’ha validata esplicitamente', 'non da solo la versione di WPA', 'ETSI in Europa compresa', 'il framework avvia un tentativo di connessione', 'Anche dumpsys wifi, più circoscritto', 'ripristino dei dati di fabbrica']) assert.ok(all.includes(s), s);
+  assert.ok(!all.includes('4 · DHCP e IP') && !all.includes('il gateway risponde') && !all.includes('U-NII-2A, con DFS') && !all.includes('PSK (WPA2-Personal) secondo') && !all.includes('MAC_CHANGE · CMD_START_CONNECT'));
   const tools = blocks.filter((b) => b.tool).map((b) => b.tool);
   assert.deepEqual(tools, ['#/wireless/potenza', '#/l2/mac']);
   const it = guideTexts(g).map(([x]) => x).join(' ');
