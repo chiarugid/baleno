@@ -1889,6 +1889,8 @@ test('guida Android: opzioni, comandi adb e rimandi agli strumenti', () => {
   for (const s of ['non sono direttamente confrontabili', 'usa la ricerca nelle impostazioni', 'log di sistema e delle altre app', 'non pubblicarli mai']) assert.ok(it.includes(s), s);
   // terza revisione: SNR dal controller, 4-way handshake, MLO, permessi Android 13, modalità non persistente
   for (const s of ['Android in genere non mostra l’SNR', '4-way handshake', 'Multi-Link Operation', 'NEARBY_WIFI_DEVICES', 'ACCESS_FINE_LOCATION', 'reti suggerite da un’app', 'Protected Management Frames']) assert.ok(it.includes(s), s);
+  // quarta revisione: permessi completi per startScan/getScanResults, MLO limitato alle API WifiInfo
+  for (const s of ['CHANGE_WIFI_STATE', 'ACCESS_WIFI_STATE', 'ACCESS_COARSE_LOCATION', 'valori sintetici delle API WifiInfo', 'esamina i singoli link associati']) assert.ok(it.includes(s), s);
   assert.ok(!it.includes('può deciderla il firmware') && !it.includes('per giudicare sufficiente la rete corrente'));
   // correzioni dopo revisione: niente soglie o equivalenze troppo categoriche
   assert.ok(!it.includes('diventa fragile'), 'nessuna soglia RSSI universale');
