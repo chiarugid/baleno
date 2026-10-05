@@ -1882,7 +1882,10 @@ test('guida Android: opzioni, comandi adb e rimandi agli strumenti', () => {
   assert.deepEqual(tools, ['#/wireless/potenza', '#/l2/mac']);
   const it = guideTexts(g).map(([x]) => x).join(' ');
   for (const s of ['Numero build', 'Attiva il logging dettagliato del Wi-Fi', 'Acquisisci segnalazione di bug', 'Trasferimento aggressivo dal Wi-Fi alla rete cellulare', 'Wi-Fi non-persistent MAC randomization']) assert.ok(it.includes(s), s);
-  assert.equal(g.sources.length, 4);
+  assert.equal(g.sources.length, 9);
+  // seconda revisione: dati radio, sequenza della connessione, 802.1X/WPA3, adb wireless, dumpsys
+  for (const s of ['BSSID', 'PHY rate', 'SNR', 'ritrasmissioni', 'Validazione di Android', 'TOFU', 'Debug wireless', 'non sono un’interfaccia stabile', 'resta associato al Wi-Fi', 'hardware (di fabbrica)', 'MAB sul sistema NAC', 'WifiManager.startScan', '−73 dBm a 2,4 GHz']) assert.ok(it.includes(s), s);
+  assert.ok(!it.includes('stampato sul dispositivo') && !it.includes('far sembrare il Wi-Fi'));
   // correzioni dopo revisione: niente soglie o equivalenze troppo categoriche
   assert.ok(!it.includes('diventa fragile'), 'nessuna soglia RSSI universale');
   assert.ok(it.includes('non soglie universali'));
