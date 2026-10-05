@@ -541,6 +541,16 @@ async function route({ focus = true } = {}) {
   if (focus) mainEl.focus({ preventScroll: true });
 }
 
+// ---------------------------------------------------------------- Offline
+
+// Service worker (sw.js): dopo la prima visita il sito funziona anche senza rete.
+// Solo in contesto sicuro (HTTPS o localhost), dove il browser lo consente.
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* senza service worker il sito funziona comunque online */ });
+  });
+}
+
 // ---------------------------------------------------------------- Avvio
 
 setLang(resolveLang(parseHash().params.get('lang'), read(LANG_KEY)));

@@ -1637,7 +1637,7 @@ const asn1 = await import('../js/lib/asn1.js');
 const x509 = await import('../js/lib/x509.js');
 const certsUi = await import('../js/tools/certs.js');
 const { CERT_EXAMPLES } = await import('../data/cert-examples.js');
-const { readFileSync } = await import('node:fs');
+const { readFileSync, existsSync } = await import('node:fs');
 // fine riga normalizzate: su Windows git può estrarre i fixture con CRLF
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const RSA_PEM = fixture('selfsigned.pem');
@@ -1884,7 +1884,7 @@ test('guida wlanreport: comandi e percorsi', () => {
 
 console.log('Versione dei file (cache)');
 
-const { stampHtml, collectAssets, fingerprint } = await import('../scripts/stamp.mjs');
+const { stampHtml, stampSw, collectAssets, fingerprint, STATIC_FILES } = await import('../scripts/stamp.mjs');
 
 test('index.html ha le impronte aggiornate (lancia node scripts/stamp.mjs prima del commit)', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -1898,6 +1898,19 @@ test('index.html ha le impronte aggiornate (lancia node scripts/stamp.mjs prima 
   }
   assert.ok(html.includes(`src="js/app.js?v=${assets.find((a) => a.path === 'js/app.js').hash}"`));
   assert.ok(html.indexOf('type="importmap"') < html.indexOf('<script type="module"'), 'import map prima dello script');
+});
+
+test('sw.js: versione ed elenco dei file per l’uso offline aggiornati', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const sw = readFileSync(new URL('../sw.js', import.meta.url), 'utf8');
+  const assets = collectAssets();
+  assert.equal(stampSw(sw, html, assets), sw, 'sw.js non aggiornato: node scripts/stamp.mjs');
+  const list = JSON.parse(/const ASSETS = (\[[\s\S]*?\]);/.exec(sw)[1]);
+  assert.deepEqual(list.slice(0, STATIC_FILES.length), STATIC_FILES);
+  assert.equal(list.length, STATIC_FILES.length + assets.length);
+  for (const a of assets) assert.ok(list.includes(`./${a.path}?v=${a.hash}`), a.path);
+  for (const f of STATIC_FILES.slice(2)) assert.ok(existsSync(new URL(`../${f.slice(2)}`, import.meta.url)), f);
+  assert.match(/const VERSION = '([0-9a-f]{10})'/.exec(sw)?.[1] ?? '', /^[0-9a-f]{10}$/);
 });
 
 test('impronta indipendente dalle fine riga', () => {

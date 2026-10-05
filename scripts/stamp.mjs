@@ -1,6 +1,6 @@
 // Versione dei file contro la cache del browser (nessun build step: si lancia prima del commit).
-//   node scripts/stamp.mjs          aggiorna index.html
-//   node scripts/stamp.mjs --check  esce con errore se index.html non è aggiornato
+//   node scripts/stamp.mjs          aggiorna index.html e sw.js
+//   node scripts/stamp.mjs --check  esce con errore se non sono aggiornati
 //
 // A ogni CSS e modulo JS si aggiunge ?v=<impronta del contenuto>: i fogli di stile e lo script
 // principale direttamente in index.html, gli altri moduli (anche quelli caricati con import())
@@ -56,16 +56,33 @@ export function stampHtml(html, assets) {
   return out;
 }
 
+// File salvati dal service worker per l'uso offline: pagina, icona, font e ogni asset versionato.
+export const STATIC_FILES = ['./', './index.html', './favicon.svg', './fonts/inter-var.woff2'];
+
+// sw.js con versione (impronta di index.html e degli asset) ed elenco dei file aggiornati.
+export function stampSw(sw, stampedHtml, assets) {
+  const list = [...STATIC_FILES, ...assets.map((a) => `./${a.path}?v=${a.hash}`)];
+  const version = fingerprint(stampedHtml + list.join('\n'));
+  const block = `// stamp:begin (generato da scripts/stamp.mjs, non modificare)\nconst VERSION = '${version}';\nconst ASSETS = ${JSON.stringify(list, null, 2)};\n// stamp:end`;
+  return sw.replace(/\/\/ stamp:begin[\s\S]*?\/\/ stamp:end/, block);
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const file = join(ROOT, 'index.html');
-  const html = readFileSync(file, 'utf8');
-  const stamped = stampHtml(html, collectAssets());
+  const htmlFile = join(ROOT, 'index.html');
+  const swFile = join(ROOT, 'sw.js');
+  const html = readFileSync(htmlFile, 'utf8');
+  const sw = readFileSync(swFile, 'utf8');
+  const assets = collectAssets();
+  const stampedHtml = stampHtml(html, assets);
+  const stampedSw = stampSw(sw, stampedHtml, assets);
+  const changed = [stampedHtml !== html && 'index.html', stampedSw !== sw && 'sw.js'].filter(Boolean);
   if (process.argv.includes('--check')) {
-    if (stamped !== html) { console.error('index.html non aggiornato: lancia node scripts/stamp.mjs'); process.exit(1); }
-    console.log('index.html aggiornato');
-  } else if (stamped !== html) {
-    writeFileSync(file, stamped);
-    console.log('index.html aggiornato con le nuove impronte');
+    if (changed.length) { console.error(`${changed.join(', ')} non aggiornati: lancia node scripts/stamp.mjs`); process.exit(1); }
+    console.log('index.html e sw.js aggiornati');
+  } else if (changed.length) {
+    if (stampedHtml !== html) writeFileSync(htmlFile, stampedHtml);
+    if (stampedSw !== sw) writeFileSync(swFile, stampedSw);
+    console.log(`aggiornati: ${changed.join(', ')}`);
   } else {
     console.log('nessuna modifica');
   }

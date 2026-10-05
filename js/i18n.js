@@ -102,6 +102,7 @@ add('app.', {
   mailAuthor: ['Scrivi all’autore', 'Write to the author'],
   noscript: ['Questi strumenti richiedono JavaScript attivo nel browser.', 'These tools need JavaScript enabled in the browser.'],
   infoIntro: ['raccoglie strumenti di rete e VoIP che girano interamente nel browser.', 'is a collection of network and VoIP tools that run entirely in the browser.'],
+  infoOffline: ['Dopo la prima visita il sito funziona anche senza connessione: i file restano salvati nel browser e si aggiornano da soli quando torni online.', 'After the first visit the site also works without a connection: the files stay saved in the browser and update themselves when you are back online.'],
   infoPrivacy: ['Nessun backend, nessuna chiamata esterna, nessun tracking: i dati che inserisci non lasciano il dispositivo. Le preferenze (tema, sidebar, lingua, contatore visite) restano solo nella memoria locale del browser.', 'No backend, no external requests, no tracking: the data you enter never leaves your device. Preferences (theme, sidebar, language, visit counter) stay in the browser’s local storage only.'],
   infoFeedback: ['Segnalazioni, idee o correzioni:', 'Bug reports, ideas or corrections:'],
   infoMail: ['scrivi all’autore', 'write to the author'],

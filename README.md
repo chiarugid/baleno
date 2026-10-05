@@ -47,7 +47,7 @@ python -m http.server 8000
 
 poi apri <http://localhost:8000>.
 
-## Versione dei file (cache)
+## Versione dei file e uso offline
 
 GitHub Pages lascia i file in cache nel browser per 10 minuti. Per far arrivare subito gli aggiornamenti, ogni CSS e modulo JS è richiesto con `?v=<impronta del contenuto>`: i fogli di stile e `js/app.js` direttamente in `index.html`, gli altri moduli tramite una import map. **Prima di ogni commit** che tocca `js/`, `data/` o `css/`:
 
@@ -55,7 +55,11 @@ GitHub Pages lascia i file in cache nel browser per 10 minuti. Per far arrivare 
 node scripts/stamp.mjs
 ```
 
-Un test di `tests/run.mjs` fallisce se `index.html` non è aggiornato.
+Lo stesso comando aggiorna `sw.js` (versione ed elenco dei file per l'uso offline). Un test di `tests/run.mjs` fallisce se `index.html` o `sw.js` non sono aggiornati.
+
+## Uso offline
+
+`sw.js` è un service worker: alla prima visita salva nel browser pagina, font, CSS e moduli (circa 680 KB), poi il sito funziona anche senza rete. La pagina si chiede sempre prima alla rete, quindi gli aggiornamenti arrivano subito; i file versionati si prendono dalla cache. A ogni nuova versione le cache precedenti vengono eliminate.
 
 ## Test
 
