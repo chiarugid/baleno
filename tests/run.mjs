@@ -1872,6 +1872,19 @@ test('guide: ogni testo in italiano e in inglese, nessun italiano nella versione
   }
 });
 
+test('guida Android: opzioni, comandi adb e rimandi agli strumenti', () => {
+  const g = GUIDES.find((x) => x.id === 'android-wifi');
+  assert.ok(g, 'guida presente');
+  const blocks = g.sections.flatMap((s) => s.blocks);
+  const codes = blocks.filter((b) => b.code).map((b) => b.code);
+  assert.deepEqual(codes, ['adb devices', 'adb bugreport', 'adb shell dumpsys wifi']);
+  const tools = blocks.filter((b) => b.tool).map((b) => b.tool);
+  assert.deepEqual(tools, ['#/wireless/potenza', '#/l2/mac']);
+  const it = guideTexts(g).map(([x]) => x).join(' ');
+  for (const s of ['Numero build', 'Attiva il logging dettagliato del Wi-Fi', 'Acquisisci segnalazione di bug', 'Trasferimento aggressivo dal Wi-Fi alla rete cellulare', 'Wi-Fi non-persistent MAC randomization']) assert.ok(it.includes(s), s);
+  assert.equal(g.sources.length, 4);
+});
+
 test('guida wlanreport: comandi e percorsi', () => {
   const g = GUIDES.find((x) => x.id === 'wlanreport');
   const codes = g.sections.flatMap((s) => s.blocks).filter((b) => b.code).map((b) => b.code);

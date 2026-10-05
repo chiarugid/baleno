@@ -4,10 +4,12 @@
 
 import { h, copyText, toast } from './ui/dom.js';
 import { iconButton } from './ui/dashlet.js';
+import { icon } from './ui/icons.js';
 import { t, getLang } from './i18n.js';
 import wlanreport from '../data/guides/wlanreport.js';
+import androidWifi from '../data/guides/android-wifi.js';
 
-export const GUIDES = [wlanreport];
+export const GUIDES = [wlanreport, androidWifi];
 
 // Testo nella lingua corrente: coppia [it, en] oppure stringa uguale per entrambe.
 export const L = (v) => (Array.isArray(v) ? v[getLang() === 'en' ? 1 : 0] : v);
@@ -18,7 +20,7 @@ export function guideTexts(guide) {
   const walk = (v) => {
     if (Array.isArray(v) && v.length === 2 && v.every((x) => typeof x === 'string')) out.push(v);
     else if (Array.isArray(v)) v.forEach(walk);
-    else if (v && typeof v === 'object') Object.entries(v).forEach(([k, x]) => { if (k !== 'code' && k !== 'console' && k !== 'url') walk(x); });
+    else if (v && typeof v === 'object') Object.entries(v).forEach(([k, x]) => { if (k !== 'code' && k !== 'console' && k !== 'url' && k !== 'tool') walk(x); });
   };
   walk(guide);
   return out;
@@ -104,6 +106,8 @@ function blockView(block) {
   if (block.table) return tableBlock(block.table);
   if (block.warn) return h('ul', { class: 'notes' }, h('li', { class: 'note note--warn' }, L(block.warn)));
   if (block.mock) return MOCKS[block.mock]();
+  // rimando a uno strumento del sito
+  if (block.tool) return h('p', { class: 'guide-tool' }, icon('arrowRight'), h('a', { href: block.tool }, L(block.label)));
   return null;
 }
 

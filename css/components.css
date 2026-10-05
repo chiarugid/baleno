@@ -729,3 +729,5 @@ fieldset.field--plain legend { padding: 0; margin-bottom: 4px; }
 .wr-ev--wlan td:first-child { border-left: 3px solid var(--chart-line); }
 .wr-ev--ncsi td:first-child { border-left: 3px solid var(--ok); }
 .budget-env { margin: -6px 0 8px; color: var(--text-muted); font-size: var(--fs-sm); }
+.guide-tool { display: flex; align-items: flex-start; gap: 6px; padding: 8px 12px; border-radius: var(--radius); background: var(--accent-soft); font-size: var(--fs-sm); }
+.guide-tool .icon { margin-top: 2px; color: var(--accent-text); }

@@ -19,7 +19,10 @@ HTML, CSS e JavaScript vanilla: nessun build step, nessun backend, nessuna chiam
 
 ## Guide pratiche
 
-La sezione **Guide pratiche** raccoglie procedure passo per passo con comandi da copiare, esempi di risultato e fonti ufficiali, anch'esse indicative. Ogni guida è un file in `data/guides/` con i testi in coppie italiano/inglese; la resa è in `js/guides.js`. Prima guida: **Rapporto Wi-Fi di Windows** (`netsh wlan show wlanreport`), con l'output reale del comando e un'anteprima del rapporto ricostruita con dati inventati.
+La sezione **Guide pratiche** raccoglie procedure passo per passo con comandi da copiare, esempi di risultato e fonti ufficiali, anch'esse indicative. Ogni guida è un file in `data/guides/` con i testi in coppie italiano/inglese; la resa è in `js/guides.js`. Guide disponibili:
+
+- **Rapporto Wi-Fi di Windows** (`netsh wlan show wlanreport`), con l'output reale del comando e un'anteprima del rapporto ricostruita con dati inventati;
+- **Troubleshooting Wi-Fi su Android** con le Opzioni sviluppatore: logging dettagliato, limitazione della scansione, MAC casuale, passaggio alla rete mobile, segnalazione di bug e `adb`, con fonti ufficiali Android.
 
 ## Strumenti esterni
 
